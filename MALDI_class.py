@@ -207,7 +207,7 @@ class binnedMALDI(MALDI):
 	binned_resolution : float
 		individual replacement for resolution
 	"""
-	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1, binned_resolution = None, data_histo = None):
+	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1, binned_resolution = None, data_histo = None, correlation = None):
 		super().__init__(filename, resolution, Range, n_processes)
 		if not binned_resolution:
 			self.binned_resolution = self.resolution
@@ -218,7 +218,7 @@ class binnedMALDI(MALDI):
 			self.bin_all()
 		else:
 			self.data_histo = data_histo
-		self.correlation = None
+		self.correlation = correlation
 
 	def bin_2D(self, data_spectrum, index = 0):
 		"""calculate the normalized histogram values acoording to self.bins
@@ -476,6 +476,12 @@ class binnedMALDI(MALDI):
 				selected.peak_histo[:,i] = self.data_histo[:, binn]
 		return selected
 
+	def calculate_correlation(self):
+		"""calculate the correlation of all entries in self.data_histo
+		"""
+		self.correlation = np.corrcoef(np.transpose(self.data_histo))
+
+
 	def correlatepeaks(self, refpeak):
 		"""calculate the correlation between the spatial distribution of a refpeak and all other peaks based on peaks in data_histo
 		
@@ -490,18 +496,31 @@ class binnedMALDI(MALDI):
 			the correlation including the refpeak
 		"""
 		if self.correlation is None:		# implement some case, to not calculate over and over again
-			self.correlation = np.corrcoef(np.transpose(self.data_histo))
+			self.calculate_correlation()
 		refindex = np.digitize(refpeak, self.bins)-1
 		return self.correlation[refindex, :]
 
-	def plot_mean_spec(self):
-		"""calculate the mean spectrum of the binned data
+	def plot_mean_spec(self, peaklist = None):
+		"""make a nice plot of the mean spectrum of the binned data
+
+		PARAMETERS
+		----------
+		peaklist : array, shape = [n_peaks]
+			a list of peaks to mark in the spectrum
 
 		RETURNS
 		-------
 		mean_spec : array, shape = [n_bins]		
 		"""
-		return np.mean(data_histo, axis = 0)
+		mean_spec = np.mean(self.data_histo, axis = 0)
+		import matplotlib.pyplot as plt
+		plt.plot(self.bincenters, mean_spec, linewidth = 1., color = 'green')
+		if peaklist is not None:
+			for peak in peaklist:
+				plt.plot([peak, peak], [0, np.max(mean_spec)], linestyle = '--', color = 'r', alpha = .5)
+		plt.xlabel('$m/z$')
+		plt.ylabel('intensity/a.u.')
+
 
 	def kmeans(self, n_clusters):
 		"""calculate n_clusters using a kmeans algorithm
