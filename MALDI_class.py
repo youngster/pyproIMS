@@ -514,12 +514,16 @@ class binnedMALDI(MALDI):
 		"""
 		mean_spec = np.mean(self.data_histo, axis = 0)
 		import matplotlib.pyplot as plt
-		plt.plot(self.bincenters, mean_spec, linewidth = 1., color = 'green')
+		plt.figure(figsize = (8,4))
+		plt.plot(self.bincenters, mean_spec, linewidth = 1., color = 'green', label = 'average spectrum')
 		if peaklist is not None:
-			for peak in peaklist:
+			for peak in peaklist[:-1]:
 				plt.plot([peak, peak], [0, np.max(mean_spec)], linestyle = '--', color = 'r', alpha = .5)
+			plt.plot([peaklist[-1], peaklist[-1]], [0, np.max(mean_spec)], linestyle = '--', color = 'r', alpha = .5, label = 'selected peaks')
 		plt.xlabel('$m/z$')
 		plt.ylabel('intensity/a.u.')
+		plt.legend(loc = 'best')
+		plt.tight_layout()
 
 
 	def kmeans(self, n_clusters):
