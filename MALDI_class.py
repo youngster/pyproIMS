@@ -157,7 +157,7 @@ class rawMALDI(MALDI):
 
 		diffs = np.abs(self.data_spectrum[pixel][0]-mz)
 		if suminres:
-			minindices = np.where(diffs<resolution)
+			minindices = np.where(diffs<resolution*mz)
 			if (diffs[minindices] > resolution*mz).any():
 				intensity = 0.
 			else:
