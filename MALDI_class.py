@@ -193,6 +193,228 @@ class rawMALDI(MALDI):
 			massvec[pixel] = self.getmzint(pixel, mz, new_resolution, suminres = suminres)
 		return massvec
 
+	def fit_gauss(self, positions, sigmas, amps, rel_fitrange, peak_by_peak = True):
+		"""fit gauss peaks at positions with sigmas and amps starting-parameters
+
+		PARAMETERS
+		----------
+		positions: array, shape = [n_peaks] or [n_peaks, n_pixels]
+			the estimated positions of the peaks, may be single list for all spectra or a list for each pixel, along second dim
+		sigmas : array, shape = [n_peaks] or [n_peaks, n_pixels]
+			the estimated sigma of the peaks
+		amps : array, shape = [n_peaks] or [n_peaks, n_pixels]
+			the estimated amplitude of the peaks
+		fitrange : float
+			the relative range around peaks for fitting
+		peak_by_peak : bool
+			If True fit each peak in fitrange individually, otherwise fit full spectrum
+
+		RETURNS
+		-------
+		chi_res : array, shape = [n_pixels]
+			the reduced chi square of the fit
+		amps : array, shape = [n_peaks, n_pixels]
+			the resulting amplitude of each gauss function
+		x0 : array, shape = [n_peaks, n_pixels]
+			the resulting position of each gauss function
+		sigma : array, shape = [n_peaks, n_pixels]
+			the resulting sigma of each gauss function
+		amps_err : array, shape = [n_peaks, n_pixels]
+			the resulting amplitude error of each gauss function
+		x0_err : array, shape = [n_peaks, n_pixels]
+			the resulting position error of each gauss function
+		sigma_err : array, shape = [n_peaks, n_pixels]
+			the resulting sigma error of each gauss function
+		"""
+		from lmfit import models,Model
+		def gausss(x, amp, x0, sigma):
+			return amp*np.exp(-((x-x0)/sigma)**2/2)
+		
+		fitrange = positions*rel_fitrange
+		n_peaks = positions.shape[0]
+		amp = np.zeros((n_peaks, self.indices.shape[0]))
+		x0 = np.zeros((n_peaks, self.indices.shape[0]))
+		sigma = np.zeros((n_peaks, self.indices.shape[0]))
+		amps_err = np.zeros((n_peaks, self.indices.shape[0]))
+		x0_err = np.zeros((n_peaks, self.indices.shape[0]))
+		sigma_err = np.zeros((n_peaks, self.indices.shape[0]))
+
+		prefixes = np.empty((n_peaks), dtype = '<U21')
+		fit_amp = np.empty((n_peaks), dtype = '<U21')
+		fit_x0 = np.empty((n_peaks), dtype = '<U21')
+		fit_sigma = np.empty((n_peaks), dtype = '<U21')
+		fullmodel = None
+
+		if peak_by_peak:
+			chi_res = np.zeros((n_peaks, self.indices.shape[0]))
+			if len(positions.shape) == 1:
+				for peak in range(n_peaks):
+					print('adding model for peak ', peak)
+					prefixes[peak] = 'PsV_' + str(peak) + '_'
+					fit_amp[peak] = prefixes[peak] +  'amp'
+					fit_x0[peak] = prefixes[peak] +  'x0'
+					fit_sigma[peak] = prefixes[peak] +  'sigma'
+
+					model = Model(gausss, prefix = prefixes[peak])
+					params = model.make_params()
+					params[fit_amp[peak]].set(amps[peak], min = 1)#, max = 60000)
+					params[fit_x0[peak]].set(positions[peak], min = positions[peak] - fitrange[peak], max = positions[peak] + fitrange[peak])
+					params[fit_sigma[peak]].set(sigmas[peak], min = 1e-32)
+					for pixel in self.indices:
+						print('fitting peak ', peak, 'in pixel ', pixel)
+						lower = self.nearestmzindex(pixel, positions[peak] - fitrange[peak])
+						higher = self.nearestmzindex(pixel, positions[peak] + fitrange[peak])
+						if lower == higher:
+							print('peak not measured')
+							chi_res[peak,pixel] = None
+							amp[peak,pixel] = None
+							x0[peak,pixel] = None
+							sigma[peak,pixel] = None
+							amps_err[peak,pixel] = None
+							x0_err[peak,pixel] = None
+							sigma_err[peak,pixel] = None
+							continue
+						elif higher - lower < 3:
+							print('not enough indices')
+							lower -= 1
+							higher += 1
+						weight = np.sqrt(self.data_spectrum[pixel][1][lower:higher])
+						weight[self.data_spectrum[pixel][1][lower:higher] == 0] = 1e-32
+						fit = model.fit(x = self.data_spectrum[pixel][0][lower:higher], params = params, data = self.data_spectrum[pixel][1][lower:higher])#, weights = 1/weight)
+						#print(fit.fit_report())
+						chi_res[peak,pixel] = fit.redchi	
+						amp[peak,pixel] = fit.result.params[fit_amp[peak]].value
+						x0[peak,pixel] = fit.result.params[fit_x0[peak]].value
+						sigma[peak,pixel] = fit.result.params[fit_sigma[peak]].value
+						amps_err[peak,pixel] = fit.result.params[fit_amp[peak]].stderr
+						x0_err[peak,pixel] = fit.result.params[fit_x0[peak]].stderr
+						sigma_err[peak,pixel] = fit.result.params[fit_sigma[peak]].stderr
+			elif len(positions.shape) == 2:
+				n_peaks = np.count_nonzero(positions[:, pixel])
+				for pixel in self.indices:
+					for peak in range(n_peaks):
+						print('fitting peak ', peak, 'in pixel ', pixel)
+						prefixes[peak] = 'PsV_' + str(peak) + '_'
+						fit_amp[peak] = prefixes[peak] +  'amp'
+						fit_x0[peak] = prefixes[peak] +  'x0'
+						fit_sigma[peak] = prefixes[peak] +  'sigma'
+
+						model = Model(gausss, prefix = prefixes[peak])
+						params = model.make_params()
+						params[fit_amp[peak]].set(amps[peak], min = 1)#, max = 60000)
+						params[fit_x0[peak]].set(positions[peak], min = positions[peak] - fitrange[peak], max = positions[peak] + fitrange[peak])
+						params[fit_sigma[peak]].set(sigmas[peak], min = 1e-32)
+						lower = self.nearestmzindex(pixel, positions[peak] - fitrange[peak])
+						higher = self.nearestmzindex(pixel, positions[peak] + fitrange[peak])
+						if lower == higher:
+							print('peak not measured')
+							chi_res[peak,pixel] = None
+							amps[peak,pixel] = None
+							x0[peak,pixel] = None
+							sigma[peak,pixel] = None
+							amps_err[peak,pixel] = None
+							x0_err[peak,pixel] = None
+							sigma_err[peak,pixel] = None
+							continue
+						elif higher - lower < 3:
+							print('not enough indices')
+							lower -= 1
+							higher += 1
+						weight = np.sqrt(self.data_spectrum[pixel][1][lower:higher])
+						weight[self.data_spectrum[pixel][1][lower:higher] == 0] = 1e-32
+						fit = model.fit(x = self.data_spectrum[pixel][0][lower:higher], params = params, data = self.data_spectrum[pixel][1][lower:higher])#, weights = 1/weight)
+						#print(fit.fit_report())
+						chi_res[peak,pixel] = fit.redchi	
+						amp[peak,pixel] = fit.result.params[fit_amp[peak]].value
+						x0[peak,pixel] = fit.result.params[fit_x0[peak]].value
+						sigma[peak,pixel] = fit.result.params[fit_sigma[peak]].value
+						amps_err[peak,pixel] = fit.result.params[fit_amp[peak]].stderr
+						x0_err[peak,pixel] = fit.result.params[fit_x0[peak]].stderr
+						sigma_err[peak,pixel] = fit.result.params[fit_sigma[peak]].stderr
+			else:
+				raise ValueError
+		else:
+			chi_res = np.zeros((self.indices.shape[0]))
+			if len(positions.shape) == 1:
+				for peak in range(n_peaks):
+					print('adding model for peak ', peak)
+					prefixes[peak] = 'PsV_' + str(peak) + '_'
+					fit_amp[peak] = prefixes[peak] +  'amp'
+					fit_x0[peak] = prefixes[peak] +  'x0'
+					fit_sigma[peak] = prefixes[peak] +  'sigma'
+
+					tempmodel = Model(gausss, prefix = prefixes[peak])
+					tempparams = tempmodel.make_params()
+					tempparams[fit_amp[peak]].set(amps[peak], min = 1)#, max = 60000)
+					tempparams[fit_x0[peak]].set(positions[peak], min = positions[peak] - fitrange[peak], max = positions[peak] + fitrange[peak])
+					tempparams[fit_sigma[peak]].set(sigmas[peak], min = 1e-32)
+					if fullmodel is None:
+						fullmodel = tempmodel
+						fullparams = tempparams
+					else:
+						fullmodel += tempmodel
+						fullparams += tempparams
+				for pixel in self.indices:
+					print('fitting model in pixel ', pixel)
+					model = fullmodel
+					params = fullparams
+
+					#weight = np.sqrt(self.data_spectrum[pixel][1])
+					#weight[self.data_spectrum[pixel][1] == 0] = 1e-32
+					fit = model.fit(x = self.data_spectrum[pixel][0], params = params, data = self.data_spectrum[pixel][1])#, weights = 1/weight)
+					#print(fit.fit_report())
+					chi_res[pixel] = fit.redchi	
+					for peak in range(n_peaks):
+						amp[peak,pixel] = fit.result.params[fit_amp[peak]].value
+						x0[peak,pixel] = fit.result.params[fit_x0[peak]].value
+						sigma[peak,pixel] = fit.result.params[fit_sigma[peak]].value
+						amps_err[peak,pixel] = fit.result.params[fit_amp[peak]].stderr
+						x0_err[peak,pixel] = fit.result.params[fit_x0[peak]].stderr
+						sigma_err[peak,pixel] = fit.result.params[fit_sigma[peak]].stderr
+
+			elif len(positions.shape) == 2:
+				###MAYBE BETTER WORK WITH NANS INSTEAD OF ZEROS
+				for pixel in self.indices:
+					n_peaks = np.count_nonzero(positions[:, pixel])
+					for peak in range(n_peaks):
+						print('adding model for peak ', peak)
+						prefixes[peak] = 'PsV_' + str(peak) + '_'
+						fit_amp[peak] = prefixes[peak] +  'amp'
+						fit_x0[peak] = prefixes[peak] +  'x0'
+						fit_sigma[peak] = prefixes[peak] +  'sigma'
+
+						tempmodel = Model(gausss, prefix = prefixes[peak])
+						tempparams = tempmodel.make_params()
+						tempparams[fit_amp[peak]].set(amps[peak, pixel], min = 1)#, max = 60000)
+						tempparams[fit_x0[peak]].set(positions[peak, pixel], min = positions[peak, pixel] - fitrange[peak, pixel], max = positions[peak, pixel] + fitrange[peak, pixel])
+						tempparams[fit_sigma[peak]].set(sigmas[peak, pixel], min = 1e-32)
+						if fullmodel is None:
+							fullmodel = tempmodel
+							fullparams = tempparams
+						else:
+							fullmodel += tempmodel
+							fullparams += tempparams
+					print('fitting model in pixel ', pixel)
+					model = fullmodel
+					params = fullparams
+
+					#weight = np.sqrt(self.data_spectrum[pixel][1])
+					#weight[self.data_spectrum[pixel][1] == 0] = 1e-32
+					fit = model.fit(x = self.data_spectrum[pixel][0], params = params, data = self.data_spectrum[pixel][1])#, weights = 1/weight)
+					#print(fit.fit_report())
+					chi_res[pixel] = fit.redchi	
+					for peak in range(n_peaks):
+						amp[peak,pixel] = fit.result.params[fit_amp[peak]].value
+						x0[peak,pixel] = fit.result.params[fit_x0[peak]].value
+						sigma[peak,pixel] = fit.result.params[fit_sigma[peak]].value
+						amps_err[peak,pixel] = fit.result.params[fit_amp[peak]].stderr
+						x0_err[peak,pixel] = fit.result.params[fit_x0[peak]].stderr
+						sigma_err[peak,pixel] = fit.result.params[fit_sigma[peak]].stderr
+			else:
+				raise ValueError
+		return chi_res, amp, x0, sigma, amps_err, x0_err, sigma_err
+
+
 class binnedMALDI(MALDI):
 	"""A class for processing binned MALDI data
 
@@ -514,7 +736,7 @@ class binnedMALDI(MALDI):
 		"""
 		mean_spec = np.mean(self.data_histo, axis = 0)
 		import matplotlib.pyplot as plt
-		plt.figure(figsize = (8,4))
+		plt.figure(figsize = (7.5,4))
 		plt.plot(self.bincenters, mean_spec, linewidth = 1., color = 'green', label = 'average spectrum')
 		if peaklist is not None:
 			for peak in peaklist[:-1]:
