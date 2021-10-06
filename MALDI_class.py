@@ -193,6 +193,52 @@ class rawMALDI(MALDI):
 			massvec[pixel] = self.getmzint(pixel, mz, new_resolution, suminres = suminres)
 		return massvec
 
+	def normalize(self, algorithm = 'tic', return_map = False, peaklist = None, inplace = True):
+		"""normalize the unbinned data using specified algorithm 
+
+		PARAMETERS
+		----------
+		algorithm : {'tic', 'tic_perpeak', median'}
+			str specifying the algorithm to use, default is 'tic'
+		return_map : boolean
+			states if the normalization factors for all pixels should be returned as a vector
+		peaklist : array-like
+			list of peaks relevant for specific normalization method, optional, depending on method
+		inplace : bool
+			if true self.data_histo is modified and will not be returned
+
+		RETURNS
+		-------
+		factor : array, shape = self.indices or selected pixels
+			the normalization factors for all pixels
+		norm_data_spectrum : list[lists], shape = [n_pixels, 2]
+			as data_spectrum but normalized, only returned if inplace = False
+		"""
+		if peaklist:
+			raise NotImplementedError
+		factor = np.empty(len(self.indices))
+		if algorithm == 'tic':
+			for pixel in self.indices:
+				factor[pixel] = self.data_spectrum[pixel][1].sum()
+		elif algorithm == 'tic_perpeak':
+			for pixel in self.indices:
+				factor[pixel] = self.data_spectrum[pixel][1].sum()/len(self.data_spectrum[pixel][1])
+		elif algorithm == 'median':
+			factor = np.median(self.data_histo[:,peaklist], axis = 1)
+		else:
+			raise NotImplementedError
+		if inplace:
+			for pixel in self.indices:
+				self.data_spectrum[pixel][1]/=factor[pixel]
+			if return_map:
+				return factor
+		else:
+			norm_data_spectrum = self.data_spectrum[pixel][1] / factor[pixel]
+			if return_map:
+				return factor, norm_data_spectrum
+			else:
+				return norm_data_spectrum
+
 	def fit_gauss(self, positions, sigmas, amps, rel_fitrange, peak_by_peak = True):
 		"""fit gauss peaks at positions with sigmas and amps starting-parameters
 
@@ -290,8 +336,8 @@ class rawMALDI(MALDI):
 						x0_err[peak,pixel] = fit.result.params[fit_x0[peak]].stderr
 						sigma_err[peak,pixel] = fit.result.params[fit_sigma[peak]].stderr
 			elif len(positions.shape) == 2:
-				n_peaks = np.count_nonzero(positions[:, pixel])
 				for pixel in self.indices:
+					n_peaks = np.count_nonzero(positions[:, pixel])
 					for peak in range(n_peaks):
 						print('fitting peak ', peak, 'in pixel ', pixel)
 						prefixes[peak] = 'PsV_' + str(peak) + '_'
@@ -560,7 +606,7 @@ class binnedMALDI(MALDI):
 		return_map : boolean
 			states if the normalization factors for all pixels should be returned as a vector
 		peaklist : array-like
-			list of peaks relevant for specified normalization method, optional, depending on method
+			list of peaks relevant for specific normalization method, optional, depending on method
 		inplace : bool
 			if true self.data_histo is modified and will not be returned
 
@@ -581,11 +627,11 @@ class binnedMALDI(MALDI):
 		else:
 			raise NotImplementedError
 		if inplace:
-			self.data_histo*=factor[:,np.newaxis]
+			self.data_histo/=factor[:,np.newaxis]
 			if return_map:
 				return factor
 		else:
-			norm_histo = self.data_histo * factor[:,np.newaxis]
+			norm_histo = self.data_histo / factor[:,np.newaxis]
 			if return_map:
 				return factor, norm_histo
 			else:
