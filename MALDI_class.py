@@ -310,7 +310,7 @@ class rawMALDI(MALDI):
 						print('fitting peak ', peak, 'in pixel ', pixel)
 						lower = self.nearestmzindex(pixel, positions[peak] - fitrange[peak])
 						higher = self.nearestmzindex(pixel, positions[peak] + fitrange[peak])
-						if lower == higher:
+						if higher - lower < 3:#lower == higher:
 							print('peak not measured')
 							chi_res[peak,pixel] = None
 							amp[peak,pixel] = None
@@ -320,10 +320,10 @@ class rawMALDI(MALDI):
 							x0_err[peak,pixel] = None
 							sigma_err[peak,pixel] = None
 							continue
-						elif higher - lower < 3:
-							print('not enough indices')
-							lower -= 1
-							higher += 1
+						#elif higher - lower < 3:
+						#	print('not enough indices')
+						#	lower -= 1
+						#	higher += 1
 						weight = np.sqrt(self.data_spectrum[pixel][1][lower:higher])
 						weight[self.data_spectrum[pixel][1][lower:higher] == 0] = 1e-32
 						fit = model.fit(x = self.data_spectrum[pixel][0][lower:higher], params = params, data = self.data_spectrum[pixel][1][lower:higher])#, weights = 1/weight)
@@ -352,7 +352,7 @@ class rawMALDI(MALDI):
 						params[fit_sigma[peak]].set(sigmas[peak], min = 1e-32)
 						lower = self.nearestmzindex(pixel, positions[peak] - fitrange[peak])
 						higher = self.nearestmzindex(pixel, positions[peak] + fitrange[peak])
-						if lower == higher:
+						if higher - lower < 3:#lower == higher:
 							print('peak not measured')
 							chi_res[peak,pixel] = None
 							amps[peak,pixel] = None
@@ -362,10 +362,10 @@ class rawMALDI(MALDI):
 							x0_err[peak,pixel] = None
 							sigma_err[peak,pixel] = None
 							continue
-						elif higher - lower < 3:
-							print('not enough indices')
-							lower -= 1
-							higher += 1
+						#elif higher - lower < 3:
+						#	print('not enough indices')
+						#	lower -= 1
+						#	higher += 1
 						weight = np.sqrt(self.data_spectrum[pixel][1][lower:higher])
 						weight[self.data_spectrum[pixel][1][lower:higher] == 0] = 1e-32
 						fit = model.fit(x = self.data_spectrum[pixel][0][lower:higher], params = params, data = self.data_spectrum[pixel][1][lower:higher])#, weights = 1/weight)
