@@ -276,6 +276,10 @@ class rawMALDI(MALDI):
 			the resulting sigma error of each gauss function
 		"""
 		from lmfit import models,Model
+		def gausss(x, amplitude, center, sigma):
+			#return 1/(sigma*np.sqrt(2*np.pi))*amplitude*np.exp(-((x-center)/sigma)**2/2)
+			return amplitude*np.exp(-((x-center)/sigma)**2/2)
+
 		
 		fitrange = positions*rel_fitrange
 		n_peaks = positions.shape[0]
@@ -298,7 +302,7 @@ class rawMALDI(MALDI):
 				if parallel == True:
 					for peak in range(n_peaks):
 						print('adding model for peak ', peak)
-						model = models.GaussianModel(prefix = prefixes[peak])
+						model = Model(gausss, prefix = prefixes[peak])
 						params = model.make_params()
 						params['amplitude'].set(amps[peak], min = 1)#, max = 60000)
 						params['center'].set(positions[peak], min = positions[peak] - fitrange[peak], max = positions[peak] + fitrange[peak])
@@ -353,7 +357,8 @@ class rawMALDI(MALDI):
 						fit_x0[peak] = prefixes[peak] +  'center'
 						fit_sigma[peak] = prefixes[peak] +  'sigma'
 
-						model = models.GaussianModel(prefix = prefixes[peak])
+						model = Model(gausss, prefix = prefixes[peak])
+
 						params = model.make_params()
 						params[fit_amp[peak]].set(amps[peak], min = 1)#, max = 60000)
 						params[fit_x0[peak]].set(positions[peak], min = positions[peak] - fitrange[peak], max = positions[peak] + fitrange[peak])
@@ -399,7 +404,7 @@ class rawMALDI(MALDI):
 						fit_x0[peak] = prefixes[peak] +  'center'
 						fit_sigma[peak] = prefixes[peak] +  'sigma'
 
-						model = models.GaussianModel(prefix = prefixes[peak])
+						model = Model(gausss, prefix = prefixes[peak])
 						params = model.make_params()
 						params[fit_amp[peak]].set(amps[peak], min = 1)#, max = 60000)
 						params[fit_x0[peak]].set(positions[peak], min = positions[peak] - fitrange[peak], max = positions[peak] + fitrange[peak])
@@ -445,7 +450,7 @@ class rawMALDI(MALDI):
 					fit_x0[peak] = prefixes[peak] +  'center'
 					fit_sigma[peak] = prefixes[peak] +  'sigma'
 
-					tempmodel = models.GaussianModel(prefix = prefixes[peak])
+					tempmodel = Model(gausss, prefix = prefixes[peak])
 					tempparams = tempmodel.make_params()
 					tempparams[fit_amp[peak]].set(amps[peak], min = 1)#, max = 60000)
 					tempparams[fit_x0[peak]].set(positions[peak], min = positions[peak] - fitrange[peak], max = positions[peak] + fitrange[peak])
@@ -485,7 +490,7 @@ class rawMALDI(MALDI):
 						fit_x0[peak] = prefixes[peak] +  'center'
 						fit_sigma[peak] = prefixes[peak] +  'sigma'
 
-						tempmodel = models.GaussianModel(prefix = prefixes[peak])
+						tempmodel = Model(gausss, prefix = prefixes[peak])
 						tempparams = tempmodel.make_params()
 						tempparams[fit_amp[peak]].set(amps[peak, pixel], min = 1)#, max = 60000)
 						tempparams[fit_x0[peak]].set(positions[peak, pixel], min = positions[peak, pixel] - fitrange[peak, pixel], max = positions[peak, pixel] + fitrange[peak, pixel])
