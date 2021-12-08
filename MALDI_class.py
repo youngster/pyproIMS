@@ -533,10 +533,14 @@ class binnedMALDI(MALDI):
 		the centers of the bins
 	data_histo : array, shape = [n_pixels, n_bins]
 		the non-sparse histogram array, defined by bins
+	data_spectrum : list[lists], shape = [n_pixels, 2]
+			contains the mzValues as first element
+			and the intensityValues as second element
+			each list element is of shape [n_Values]
 	binned_resolution : float
 		individual replacement for resolution
 	"""
-	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1, binned_resolution = None, data_histo = None, correlation = None):
+	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1, binned_resolution = None, data_histo = None, data_spectrum = None, correlation = None):
 		super().__init__(filename, resolution, Range, n_processes)
 		if not binned_resolution:
 			self.binned_resolution = self.resolution
@@ -544,7 +548,9 @@ class binnedMALDI(MALDI):
 			self.binned_resolution = binned_resolution
 		self.bin_data()
 		if data_histo is None:
-			self.bin_all()
+			if data_spectrum is None:
+				data_spectrum = rawMALDI(self.filename, self.resolution, self.Range, self.n_processes).data_spectrum
+			self.bin_all(data_spectrum)
 		else:
 			self.data_histo = data_histo
 		self.correlation = correlation
@@ -571,9 +577,8 @@ class binnedMALDI(MALDI):
 		n,_ = np.histogram(data_spectrum[index][0], bins=self.bins, weights=data_spectrum[index][1])
 		return n
 
-	def bin_all(self):
+	def bin_all(self, data_spectrum):
 		"""bin the data for all pixel"""
-		data_spectrum = rawMALDI(self.filename, self.resolution, self.Range, self.n_processes).data_spectrum
 		if self.n_processes >1:
 			def bin_2D_parralel(data_specbins):
 				""""calculate the normalized histogram values acoording to self.bins
