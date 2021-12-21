@@ -193,12 +193,12 @@ class rawMALDI(MALDI):
 			massvec[pixel] = self.getmzint(pixel, mz, new_resolution, suminres = suminres)
 		return massvec
 
-	def normalize(self, algorithm = 'tic', return_map = False, peaklist = None, inplace = True):
+	def normalize(self, algorithm = 'tic', return_map = False, peaklist = None, inplace = True, thresholds = [None, None]):
 		"""normalize the unbinned data using specified algorithm 
 
 		PARAMETERS
 		----------
-		algorithm : {'tic', 'tic_perpeak', median'}
+		algorithm : {'tic', 'tic_perpeak', 'ticwindow', median'}
 			str specifying the algorithm to use, default is 'tic'
 		return_map : boolean
 			states if the normalization factors for all pixels should be returned as a vector
@@ -206,6 +206,8 @@ class rawMALDI(MALDI):
 			list of peaks relevant for specific normalization method, optional, depending on method
 		inplace : bool
 			if true self.data_histo is modified and will not be returned
+		threshods : tuple
+			lower and upper threshold for the tic window
 
 		RETURNS
 		-------
@@ -220,6 +222,15 @@ class rawMALDI(MALDI):
 		if algorithm == 'tic':
 			for pixel in self.indices:
 				factor[pixel] = self.data_spectrum[pixel][1].sum()
+		elif algorithm == 'ticwindow':
+			if thresholds[0] is None:
+				thresholds[0] = self.Range[0]
+			if thresholds[1] is None:
+				thresholds[1] = self.Range[1]
+			for pixel in self.indices:
+				condition1 = self.data_spectrum[pixel][0] > thresholds[0]
+				condition2 = self.data_spectrum[pixel][0] < thresholds[1]
+				factor[pixel] = self.data_spectrum[pixel][1][condition1&condition2].sum()
 		elif algorithm == 'tic_perpeak':
 			for pixel in self.indices:
 				factor[pixel] = self.data_spectrum[pixel][1].sum()/len(self.data_spectrum[pixel][1])
