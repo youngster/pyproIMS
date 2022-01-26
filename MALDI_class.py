@@ -231,6 +231,10 @@ class rawMALDI(MALDI):
 				condition1 = self.data_spectrum[pixel][0] > thresholds[0]
 				condition2 = self.data_spectrum[pixel][0] < thresholds[1]
 				factor[pixel] = self.data_spectrum[pixel][1][condition1&condition2].sum()
+		elif algorithm == 'peaklist':
+			for pixel in self.indices:
+				for peak in peaklist:
+					factor[pixel] += self.getmzint(pixel, peak, self.resolution, suminres= True)
 		elif algorithm == 'tic_perpeak':
 			for pixel in self.indices:
 				factor[pixel] = self.data_spectrum[pixel][1].sum()/len(self.data_spectrum[pixel][1])
@@ -244,13 +248,15 @@ class rawMALDI(MALDI):
 			if return_map:
 				return factor
 		else:
-			norm_data_spectrum = self.data_spectrum[pixel][1] / factor[pixel]
+			norm_data_spectrum = copy.deepcopy(self.data_spectrum)
+			for pixel in self.indices:
+				norm_data_spectrum[pixel][1]/=factor[pixel]
 			if return_map:
 				return factor, norm_data_spectrum
 			else:
 				return norm_data_spectrum
 
-	def fit_gauss(self, positions, sigmas, amps, rel_fitrange, peak_by_peak = True, parallel = False):
+	def fit_gauss(self, positions, sigmas, amps, rel_fitrange, maxvalue_factor = 1.1, peak_by_peak = True, parallel = False):
 		"""fit gauss peaks at positions with sigmas and amps starting-parameters
 
 		PARAMETERS
@@ -261,8 +267,10 @@ class rawMALDI(MALDI):
 			the estimated sigma of the peaks
 		amps : array, shape = [n_peaks] or [n_peaks, n_pixels]
 			the estimated amplitude of the peaks
-		fitrange : float
+		rel_fitrange : float
 			the relative range around peaks for fitting
+		maxvalue_factor : float
+			the factor with which the fit amplitude is allowed to exceed the maximal value in the data
 		peak_by_peak : bool
 			If True fit each peak in fitrange individually, otherwise fit full spectrum, default : True
 		parallel : bool
@@ -306,12 +314,26 @@ class rawMALDI(MALDI):
 		fit_x0 = np.empty((n_peaks), dtype = '<U21')
 		fit_sigma = np.empty((n_peaks), dtype = '<U21')
 		fullmodel = None
-
+		maxs = []
+		for pixel in self.indices:
+			maxs.append(np.max(self.data_spectrum[pixel][1]))
+		maxvalue = np.max(maxs)*maxvalue_factor
 		if peak_by_peak:
 			chi_res = np.zeros((n_peaks, self.indices.shape[0]))
 			if len(positions.shape) == 1:
 				if parallel == True:
 					for peak in range(n_peaks):
+						if positions[peak] < self.Range[0]:
+							print('peak' + str(peak) + ' out of range')
+							for pixel in self.indices:
+								chi_res[peak,pixel] = None
+								amp[peak,pixel] = None
+								x0[peak,pixel] = None
+								sigma[peak,pixel] = None
+								amps_err[peak,pixel] = None
+								x0_err[peak,pixel] = None
+								sigma_err[peak,pixel] = None
+							continue
 						print('adding model for peak ', peak)
 						model = Model(gausss, prefix = prefixes[peak])
 						params = model.make_params()
@@ -335,14 +357,22 @@ class rawMALDI(MALDI):
 							param_list.append([self.data_spectrum[pixel][0][lower:higher], self.data_spectrum[pixel][1][lower:higher], params, model])
 						def fit_pixelwise(param_list):
 							fit = param_list[3].fit(x = param_list[0], params = param_list[2], data = param_list[1])
-
-							chi_res = fit.redchi	
-							amp = fit.result.params['amplitude'].value
-							x0 = fit.result.params['center'].value
-							sigma = fit.result.params['sigma'].value
-							amps_err = fit.result.params['amplitude'].stderr
-							x0_err = fit.result.params['center'].stderr
-							sigma_err = fit.result.params['sigma'].stderr
+							if fit.result.params['amplitude'].value > maxvalue:
+								chi_res = None
+								amp = None
+								x0 = None
+								sigma = None
+								amps_err = None
+								x0_err = None
+								sigma_err = None
+							else:
+								chi_res = fit.redchi	
+								amp = fit.result.params['amplitude'].value
+								x0 = fit.result.params['center'].value
+								sigma = fit.result.params['sigma'].value
+								amps_err = fit.result.params['amplitude'].stderr
+								x0_err = fit.result.params['center'].stderr
+								sigma_err = fit.result.params['sigma'].stderr
 							return [chi_res, amp, x0, sigma, amps_err, x0_err, sigma_err]
 						pool = Pool(self.n_processes)
 						fit_results = pool.map(fit_pixelwise, param_list)
@@ -362,6 +392,17 @@ class rawMALDI(MALDI):
 						sigma_err[peak,nonnan] = fit_results[:,6]
 				else:
 					for peak in range(n_peaks):
+						if positions[peak] < self.Range[0]:
+							print('peak' + str(peak) + ' out of range')
+							for pixel in self.indices:
+								chi_res[peak,pixel] = None
+								amp[peak,pixel] = None
+								x0[peak,pixel] = None
+								sigma[peak,pixel] = None
+								amps_err[peak,pixel] = None
+								x0_err[peak,pixel] = None
+								sigma_err[peak,pixel] = None
+							continue
 						print('adding model for peak ', peak)
 						prefixes[peak] = 'PsV_' + str(peak) + '_'
 						fit_amp[peak] = prefixes[peak] +  'amplitude'
@@ -396,19 +437,38 @@ class rawMALDI(MALDI):
 							#weight[self.data_spectrum[pixel][1][lower:higher] == 0] = 1e-32
 							fit = model.fit(x = self.data_spectrum[pixel][0][lower:higher], params = params, data = self.data_spectrum[pixel][1][lower:higher])#, weights = 1/weight)
 							#print(fit.fit_report())
-							chi_res[peak,pixel] = fit.redchi	
-							amp[peak,pixel] = fit.result.params[fit_amp[peak]].value
-							x0[peak,pixel] = fit.result.params[fit_x0[peak]].value
-							sigma[peak,pixel] = fit.result.params[fit_sigma[peak]].value
-							amps_err[peak,pixel] = fit.result.params[fit_amp[peak]].stderr
-							x0_err[peak,pixel] = fit.result.params[fit_x0[peak]].stderr
-							sigma_err[peak,pixel] = fit.result.params[fit_sigma[peak]].stderr
+							if fit.result.params[fit_amp[peak]].value > maxvalue:
+								chi_res[peak,pixel] = None
+								amp[peak,pixel] = None
+								x0[peak,pixel] = None
+								sigma[peak,pixel] = None
+								amps_err[peak,pixel] = None
+								x0_err[peak,pixel] = None
+								sigma_err[peak,pixel] = None
+							else:
+								chi_res[peak,pixel] = fit.redchi	
+								amp[peak,pixel] = fit.result.params[fit_amp[peak]].value
+								x0[peak,pixel] = fit.result.params[fit_x0[peak]].value
+								sigma[peak,pixel] = fit.result.params[fit_sigma[peak]].value
+								amps_err[peak,pixel] = fit.result.params[fit_amp[peak]].stderr
+								x0_err[peak,pixel] = fit.result.params[fit_x0[peak]].stderr
+								sigma_err[peak,pixel] = fit.result.params[fit_sigma[peak]].stderr
 			elif len(positions.shape) == 2:
 				if parallel == True:
 					raise NotImplementedError
 				for pixel in self.indices:
 					n_peaks = np.count_nonzero(positions[:, pixel])
 					for peak in range(n_peaks):
+						if positions[peak] < self.Range[0]:
+							print('peak' + str(peak) + ' out of range')
+							chi_res[peak,pixel] = None
+							amp[peak,pixel] = None
+							x0[peak,pixel] = None
+							sigma[peak,pixel] = None
+							amps_err[peak,pixel] = None
+							x0_err[peak,pixel] = None
+							sigma_err[peak,pixel] = None
+							continue
 						print('fitting peak ', peak, 'in pixel ', pixel)
 						prefixes[peak] = 'PsV_' + str(peak) + '_'
 						fit_amp[peak] = prefixes[peak] +  'amplitude'
@@ -440,13 +500,22 @@ class rawMALDI(MALDI):
 						#weight[self.data_spectrum[pixel][1][lower:higher] == 0] = 1e-32
 						fit = model.fit(x = self.data_spectrum[pixel][0][lower:higher], params = params, data = self.data_spectrum[pixel][1][lower:higher])#, weights = 1/weight)
 						#print(fit.fit_report())
-						chi_res[peak,pixel] = fit.redchi	
-						amp[peak,pixel] = fit.result.params[fit_amp[peak]].value
-						x0[peak,pixel] = fit.result.params[fit_x0[peak]].value
-						sigma[peak,pixel] = fit.result.params[fit_sigma[peak]].value
-						amps_err[peak,pixel] = fit.result.params[fit_amp[peak]].stderr
-						x0_err[peak,pixel] = fit.result.params[fit_x0[peak]].stderr
-						sigma_err[peak,pixel] = fit.result.params[fit_sigma[peak]].stderr
+						if fit.result.params[fit_amp[peak]].value > maxvalue:
+							chi_res[peak,pixel] = None
+							amp[peak,pixel] = None
+							x0[peak,pixel] = None
+							sigma[peak,pixel] = None
+							amps_err[peak,pixel] = None
+							x0_err[peak,pixel] = None
+							sigma_err[peak,pixel] = None
+						else:
+							chi_res[peak,pixel] = fit.redchi	
+							amp[peak,pixel] = fit.result.params[fit_amp[peak]].value
+							x0[peak,pixel] = fit.result.params[fit_x0[peak]].value
+							sigma[peak,pixel] = fit.result.params[fit_sigma[peak]].value
+							amps_err[peak,pixel] = fit.result.params[fit_amp[peak]].stderr
+							x0_err[peak,pixel] = fit.result.params[fit_x0[peak]].stderr
+							sigma_err[peak,pixel] = fit.result.params[fit_sigma[peak]].stderr
 			else:
 				raise ValueError
 		else:
@@ -481,14 +550,24 @@ class rawMALDI(MALDI):
 					#weight[self.data_spectrum[pixel][1] == 0] = 1e-32
 					fit = model.fit(x = self.data_spectrum[pixel][0], params = params, data = self.data_spectrum[pixel][1])#, weights = 1/weight)
 					#print(fit.fit_report())
-					chi_res[pixel] = fit.redchi	
-					for peak in range(n_peaks):
-						amp[peak,pixel] = fit.result.params[fit_amp[peak]].value
-						x0[peak,pixel] = fit.result.params[fit_x0[peak]].value
-						sigma[peak,pixel] = fit.result.params[fit_sigma[peak]].value
-						amps_err[peak,pixel] = fit.result.params[fit_amp[peak]].stderr
-						x0_err[peak,pixel] = fit.result.params[fit_x0[peak]].stderr
-						sigma_err[peak,pixel] = fit.result.params[fit_sigma[peak]].stderr
+					if fit.result.params[fit_amp[peak]].value > maxvalue:
+						chi_res[pixel] = None
+						for peak in range(n_peaks):
+							amp[peak,pixel] = None
+							x0[peak,pixel] = None
+							sigma[peak,pixel] = None
+							amps_err[peak,pixel] = None
+							x0_err[peak,pixel] = None
+							sigma_err[peak,pixel] = None
+					else:
+						chi_res[pixel] = fit.redchi	
+						for peak in range(n_peaks):
+							amp[peak,pixel] = fit.result.params[fit_amp[peak]].value
+							x0[peak,pixel] = fit.result.params[fit_x0[peak]].value
+							sigma[peak,pixel] = fit.result.params[fit_sigma[peak]].value
+							amps_err[peak,pixel] = fit.result.params[fit_amp[peak]].stderr
+							x0_err[peak,pixel] = fit.result.params[fit_x0[peak]].stderr
+							sigma_err[peak,pixel] = fit.result.params[fit_sigma[peak]].stderr
 
 			elif len(positions.shape) == 2:
 				###MAYBE BETTER WORK WITH NANS INSTEAD OF ZEROS
@@ -520,14 +599,24 @@ class rawMALDI(MALDI):
 					#weight[self.data_spectrum[pixel][1] == 0] = 1e-32
 					fit = model.fit(x = self.data_spectrum[pixel][0], params = params, data = self.data_spectrum[pixel][1])#, weights = 1/weight)
 					#print(fit.fit_report())
-					chi_res[pixel] = fit.redchi	
-					for peak in range(n_peaks):
-						amp[peak,pixel] = fit.result.params[fit_amp[peak]].value
-						x0[peak,pixel] = fit.result.params[fit_x0[peak]].value
-						sigma[peak,pixel] = fit.result.params[fit_sigma[peak]].value
-						amps_err[peak,pixel] = fit.result.params[fit_amp[peak]].stderr
-						x0_err[peak,pixel] = fit.result.params[fit_x0[peak]].stderr
-						sigma_err[peak,pixel] = fit.result.params[fit_sigma[peak]].stderr
+					if fit.result.params[fit_amp[peak]].value > maxvalue:
+						chi_res[pixel] = None
+						for peak in range(n_peaks):
+							amp[peak,pixel] = None
+							x0[peak,pixel] = None
+							sigma[peak,pixel] = None
+							amps_err[peak,pixel] = None
+							x0_err[peak,pixel] = None
+							sigma_err[peak,pixel] = None
+					else:
+						chi_res[pixel] = fit.redchi	
+						for peak in range(n_peaks):
+							amp[peak,pixel] = fit.result.params[fit_amp[peak]].value
+							x0[peak,pixel] = fit.result.params[fit_x0[peak]].value
+							sigma[peak,pixel] = fit.result.params[fit_sigma[peak]].value
+							amps_err[peak,pixel] = fit.result.params[fit_amp[peak]].stderr
+							x0_err[peak,pixel] = fit.result.params[fit_x0[peak]].stderr
+							sigma_err[peak,pixel] = fit.result.params[fit_sigma[peak]].stderr
 			else:
 				raise ValueError
 		return chi_res, amp, x0, sigma, amps_err, x0_err, sigma_err
