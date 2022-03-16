@@ -374,22 +374,23 @@ class rawMALDI(MALDI):
 								x0_err = fit.result.params['center'].stderr
 								sigma_err = fit.result.params['sigma'].stderr
 							return [chi_res, amp, x0, sigma, amps_err, x0_err, sigma_err]
-						pool = Pool(self.n_processes)
-						fit_results = pool.map(fit_pixelwise, param_list)
-						pool.close()
-						pool.join()
-						pool.terminate()
-						pool.restart()
-						fit_results = np.array(fit_results)
+						if len(param_list)>0:
+							pool = Pool(self.n_processes)
+							fit_results = pool.map(fit_pixelwise, param_list)
+							pool.close()
+							pool.join()
+							pool.terminate()
+							pool.restart()
+							fit_results = np.array(fit_results)
 
-						nonnan = np.nonzero(~np.isnan(chi_res[peak,:]))[0]
-						chi_res[peak,nonnan] = fit_results[:,0]
-						amp[peak,nonnan] = fit_results[:,1]
-						x0[peak,nonnan] = fit_results[:,2]
-						sigma[peak,nonnan] = fit_results[:,3]
-						amps_err[peak,nonnan] = fit_results[:,4]
-						x0_err[peak,nonnan] = fit_results[:,5]
-						sigma_err[peak,nonnan] = fit_results[:,6]
+							nonnan = np.nonzero(~np.isnan(chi_res[peak,:]))[0]
+							chi_res[peak,nonnan] = fit_results[:,0]
+							amp[peak,nonnan] = fit_results[:,1]
+							x0[peak,nonnan] = fit_results[:,2]
+							sigma[peak,nonnan] = fit_results[:,3]
+							amps_err[peak,nonnan] = fit_results[:,4]
+							x0_err[peak,nonnan] = fit_results[:,5]
+							sigma_err[peak,nonnan] = fit_results[:,6]
 				else:
 					for peak in range(n_peaks):
 						if positions[peak] < self.Range[0]:
