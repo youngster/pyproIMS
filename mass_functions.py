@@ -21,9 +21,9 @@ def get_adducts(masses = None, formulas = None, adducts = ['M+H', 'M+Na', 'M+K']
 	if ((masses is not None) & (formulas is not None)):
 		import warnings
 		warnings.warn('Ambiguous keyword arguments masses AND formulas given. Using masses, ignoring formulas')
-	if masses:
+	if masses is not None:
 		mols_adducts = process.process_file(pd.DataFrame({'mass' : masses}), mass_col = 'mass')
-	elif formulas:
+	elif formulas is not None:
 		mols_adducts = process.process_file(pd.DataFrame({'formula' : formulas}), mass_col = 'mass', no_mass_formula_col = 'formula')
 	else:
 		raise TypeError('Missing masses or formulas keyword argument')
