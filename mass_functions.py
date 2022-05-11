@@ -31,6 +31,7 @@ def get_adducts(masses = None, formulas = None, adducts = ['M+H', 'M+Na', 'M+K']
 
 def get_isotopes(formulas, molecular_abundance_threshold = 1e-2, isotope_abundance_threshold = 5e-4):
 	"""calculate isotope combinations of molecular formulas filtered by molecular and single atomic isotope abundance
+		This function is based on the pyteomics package https://github.com/levitsky/pyteomics
 
 	PARAMETERS
 	----------
