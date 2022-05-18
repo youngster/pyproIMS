@@ -1,12 +1,8 @@
 import math
 import numpy as np
-from sklearn.decomposition import PCA
-from sklearn.cluster import KMeans
-from sklearn.manifold import TSNE
-from sklearn.preprocessing import StandardScaler
 from pyimzml.ImzMLParser import ImzMLParser
+from scipy import signal
 from pathos.multiprocessing import ProcessingPool as Pool
-from scipy import signal, stats
 
 
 class MALDI(object):
@@ -833,9 +829,6 @@ class binnedMALDI(MALDI):
 			dev = np.mean(np.abs(self.data_histo - np.mean(np.diff(self.data_histo, axis = 1), axis = 1)[:, np.newaxis]), axis = 1)
 			nextstep = 'snr'
 		elif method == 'medianad':		#median absolute deviation (from the mean)
-			#from statsmodels import robust		#check documentaation for e.g. normalization, standart is for gaussian distributed noise
-			#dev = robust.mad(self.data_histo, axis = 1)[:, np.newaxis]
-			#dev = stats.median_abs_deviation(self.data_histo, axis = 1)[:, np.newaxis]
 			dev = np.median(np.abs(self.data_histo - np.mean(self.data_histo, axis = 1)[:, np.newaxis]), axis = 1)
 			nextstep = 'snr'
 		elif method == 'threshold':
@@ -974,6 +967,7 @@ class binnedMALDI(MALDI):
 		kmeans_image : array, shape = [n_pixels]
 			the pixel array with the value of the cluster
 		"""
+		from sklearn.cluster import KMeans
 		kmeans_image = KMeans(n_clusters=n_clusters).fit(self.data_histo).labels_
 		return kmeans_image
 
@@ -996,6 +990,8 @@ class binnedMALDI(MALDI):
 		PCA_evr : array, shape = [n_components]
 			the relative explained variance of each component
 		"""
+		from sklearn.decomposition import PCA
+		from sklearn.preprocessing import StandardScaler
 		if standardize:
 			scaler = StandardScaler().fit(self.data_histo)
 			pca = PCA(n_components = n_components).fit(scaler.transform(self.data_histo))
@@ -1019,6 +1015,7 @@ class binnedMALDI(MALDI):
 		TSNE_image : array, shape = [n_pixels, n_components]
 			the pixel array in each component
 		"""
+		from sklearn.manifold import TSNE
 		TSNE_image = TSNE(n_components = n_components).fit_transform(self.data_histo)
 		return TSNE_image
 

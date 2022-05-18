@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from metaspace import SMInstance
 class metaspace(object):
 	"""A class for retrieving and filtering annotations on the METASPACE platform
 
@@ -37,7 +38,6 @@ class metaspace(object):
 		sm : SMInstance
 			instance for accessing metaspace data
 		"""
-		from metaspace import SMInstance
 		sm = SMInstance(host = 'https://metaspace2020.eu', api_key = self.api_key)
 		if not sm.logged_in():
 			# Using getpass here prevents the API key from being accidentally saved with this notebook.
