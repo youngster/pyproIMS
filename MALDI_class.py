@@ -133,7 +133,7 @@ class rawMALDI(MALDI):
 	getmzint(pixel, mz, resolution, suminres = False)
 		get the intensity of the nearest measured mz value in resolution neighborhood for a given mz value
 	massvec(mz, suminres = False, new_resolution = None)
-		get a vector of the intensitys to the provided mz value in self.resolution or new_resolution in every pixel and optionally sum in the range of the resolution
+		get a vector of the intensities to the provided mz value in self.resolution or new_resolution in every pixel and optionally sum in the range of the resolution
 	normalize(algorithm = 'tic', return_map = False, peaklist = None, inplace = True, thresholds = [None, None])
 		normalize the unbinned data using specified algorithm 
 	fit_gauss(positions, sigmas, amps, rel_fitrange, maxvalue_factor = 1.1, peak_by_peak = True, parallel = False)
@@ -665,7 +665,7 @@ class rawMALDI(MALDI):
 
 
 class binnedMALDI(MALDI):
-	"""A class for processing binned MALDI data
+	"""A class for processing binned MALDI data, which allows to load already binned data
 
 	PARAMETERS
 	----------
@@ -709,7 +709,7 @@ class binnedMALDI(MALDI):
 		indices : array, shape = [n_pixels]
 				flat pixel indices
 	bins : array, shape [n_bins]
-		the binning of the data in the m/z dimension
+		the threshold values of the binning of the data in the m/z dimension including lower and upper limits
 	bincenters : array, shape [n_bins]
 		the centers of the bins
 	data_histo : array, shape = [n_pixels, n_bins]
@@ -724,16 +724,14 @@ class binnedMALDI(MALDI):
 	METHODS
 	-------
 
-	bin_2D(data_spectrum, index = 0)
-		calculate the normalized histogram values acoording to self.bins
 	bin_all(data_spectrum)
 		bin the data for all pixel
 	bin_data()
 		bin all data according to self.binned_resolution and self.Range
 	mzindex(mz)
-		return the bin of a mz value
+		return the bin of an mz value
 	massvec(mz, new_resolution = None)
-		get a vector of the intensitys to the provided mz value in self.binned_resolution or new_resolution in every pixel
+		get a vector of the intensities to the provided mz value in self.binned_resolution or new_resolution in every pixel
 	normalize(algorithm = 'tic', return_map = False, peaklist = None, inplace = True:
 		normalize the binned data using specified algorithm on all or selected pixels
 	peakpick(threshold, method = 'meanad', localmax = True, window = 5, inplace = True)
@@ -768,33 +766,12 @@ class binnedMALDI(MALDI):
 			self.data_histo = data_histo
 		self.correlation = correlation
 
-	def bin_2D(self, data_spectrum, index = 0):
-		"""calculate the normalized histogram values acoording to self.bins
-
-		PARAMETERS
-		----------
-		data_spectrum : rawMALDI.data_spectrum object
-			list[lists], shape = [n_pixels, 2]
-			contains the mzValues as first element
-			and the intensityValues as second element
-			each list element is of shape [n_Values]
-		index : int
-			the index of the pixel to calculate the histogram of
-
-		RETURNS
-		-------
-		n : array, shape = [self.bins.shape - 1]
-			the histogram values
-			
-		"""
-		n,_ = np.histogram(data_spectrum[index][0], bins=self.bins, weights=data_spectrum[index][1])
-		return n
 
 	def bin_all(self, data_spectrum):
 		"""bin the data for all pixel"""
 		if self.n_processes >1:
 			def bin_2D_parralel(data_specbins):
-				""""calculate the normalized histogram values acoording to self.bins
+				""""calculate the normalized histogram values according to self.bins parallelized
 
 				PARAMETERS
 				----------
@@ -820,11 +797,31 @@ class binnedMALDI(MALDI):
 			pool.restart()
 			self.data_histo = np.array(self.data_histo)
 		else:
+			def bin_2D(self, data_spectrum, index = 0):
+				"""calculate the normalized histogram values according to self.bins
+
+				PARAMETERS
+				----------
+				data_spectrum : rawMALDI.data_spectrum object
+				contains the mzValues as first element
+				and the intensityValues as second element
+				each element is of individual length [[mzValues, intensityValues]]
+				index : int
+					the index of the pixel to calculate the histogram of
+
+				RETURNS
+				-------
+				n : array, shape = [self.bins.shape - 1]
+					the histogram values
+					
+				"""
+				n,_ = np.histogram(data_spectrum[index][0], bins=self.bins, weights=data_spectrum[index][1])
+				return n
 			for pixel in self.indices:
-				self.data_histo[pixel,:]=self.bin_2D(data_spectrum, pixel)
+				self.data_histo[pixel,:]= bin_2D(data_spectrum, pixel)
 
 	def bin_data(self):
-		"""bin all data according to self.binned_resolution and self.Range
+		"""create bins, bincenters and empty data_histo data according to self.binned_resolution and self.Range
 		"""	
 		numbins = math.log(self.Range[1]/self.Range[0], 1+self.binned_resolution*2)
 		self.bins = self.Range[0]*(1+self.binned_resolution*2)**np.arange(numbins)
@@ -832,7 +829,7 @@ class binnedMALDI(MALDI):
 		self.data_histo = np.zeros((self.map2D.shape[0],len(self.bins)-1))
 
 	def mzindex(self, mz):
-		"""return the bin of a mz value
+		"""return the bin of an mz value
 		
 		PARAMETERS
 		----------
@@ -847,7 +844,7 @@ class binnedMALDI(MALDI):
 		return np.digitize(mz, self.bins)-1
 
 	def massvec(self, mz, new_resolution = None):
-		"""get a vector of the intensitys to the provided mz value in self.binned_resolution or new_resolution in every pixel
+		"""get a vector of the intensities to the provided mz value in self.binned_resolution or new_resolution in every pixel
 
 		PARAMETERS
 		----------
@@ -866,7 +863,7 @@ class binnedMALDI(MALDI):
 				mzbins = np.digitize(np.arange(mz-mz*new_resolution, mz+mz*new_resolution, self.binned_resolution*2), self.bins)-1
 				massvec = np.sum(self.data_histo[:,mzbins], axis = 1)
 			elif new_resolution<self.binned_resolution:
-				raise ValueError
+				raise ValueError('new_resolution mus be greater or equal to self.binned_resolution')
 			else:
 				mzbin = np.digitize(mz, self.bins)-1
 				massvec = self.data_histo[:,mzbin]			
@@ -1180,7 +1177,7 @@ class selectedMALDI(MALDI):
 		return index
 
 	def massvec(self, mz):
-		"""get a vector of the intensitys to the provided mz value in every pixel
+		"""get a vector of the intensities to the provided mz value in every pixel
 
 		PARAMETERS
 		----------
