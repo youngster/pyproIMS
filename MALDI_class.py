@@ -1,3 +1,5 @@
+"""Write dict about used packages and general applications of these classes
+"""
 import math
 import numpy as np
 from pyimzml.ImzMLParser import ImzMLParser
@@ -6,24 +8,44 @@ from pathos.multiprocessing import ProcessingPool as Pool
 
 
 class MALDI(object):
-	"""A class for reading and simple operations of MALDI imzML Data
+	"""A class for reading MALDI imzML Data and applying simple operations
 
 	PARAMETERS
 	----------
 	filename : str
 		the filename
+	resolution : float
+		the relative resolution of any measured mass value
+	Range : tuple
+		the lower and upper limits of mass values
+	n_processes : int
+		number of parallel processes for operations which allow parallelization
+
+	ATTRIBUTES
+	----------
+	filename : str
+		the filename
+	resolution : float
+		the relative resolution of any measured mass value
+	Range : tuple
+		the lower and upper limits of mass values
+	n_processes : int
+		number of parallel processes for operations which allow parallelization
+	file : ImzMLParser object
+		the parser for the imzML data by pyimzml
 	shape : array, shape = [2]
 			the size of the two dimensions
 	map2D : array, shape = [n_pixels, 2]
 			mapping of the flat pixel indices to x and y coordinates
 	indices : array, shape = [n_pixels]
 			flat pixel indices
-	resolution : float
-		the relative resolution of any measured mass value
-	Range : tuple
-		the lower and upper limits of mass values
-	n_processes : int
-		number of parallel processes
+
+	METHODS
+	-------
+	get_2D(vector)
+		return a pixel vector as 2D matrix by applying the 2D mapping
+	print_metadata()
+		retrieve and pretty print the metadata included in the imzML file
 	"""
 	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1):
 		self.filename = filename
@@ -33,15 +55,10 @@ class MALDI(object):
 		self.indices = np.arange(self.map2D.shape[0])		#flat indeces of whole dataset
 		self.resolution = resolution
 		self.n_processes = n_processes
-		if not Range:
-			raw = rawMALDI(self.filename, self.resolution, 'dummy', self.n_processes)
-			raw.apply_global_range()
-			self.Range = raw.Range
-		else:
-			self.Range = Range
+		self.Range = Range
 
 	def get_2D(self, vector):
-		"""	return a pixel vector as 2D matrix by applying the 2D mapping
+		"""return a pixel vector as 2D matrix by applying the 2D mapping
 
 		PARAMETERS
 		----------
@@ -58,7 +75,7 @@ class MALDI(object):
 		return image
 
 	def print_metadata(self):
-		"""retrieve and pretty print the metadata
+		"""retrieve and pretty print the metadata included in the imzML file
 		"""
 		from pyimzml.metadata import Metadata
 		import pprint as pp
@@ -70,12 +87,57 @@ class rawMALDI(MALDI):
 	
 	PARAMETERS
 	----------
-	file : ImzMLParser object
-		Parser for the imzML Data
+	filename : str
+		the filename
+	resolution : float
+		the relative resolution of any measured mass value
+	Range : tuple
+		the lower and upper limits of mass values
+	n_processes : int
+		number of parallel processes for operations which allow parallelization
+
+	ATTRIBUTES
+	----------
+	inherited from super class MALDI()
+		filename : str
+			the filename
+		resolution : float
+			the relative resolution of any measured mass value
+		Range : tuple
+			the lower and upper limits of mass values
+		n_processes : int
+			number of parallel processes for operations which allow parallelization
+		file : ImzMLParser object
+			the parser for the imzML data by pyimzml
+		shape : array, shape = [2]
+				the size of the two dimensions
+		map2D : array, shape = [n_pixels, 2]
+				mapping of the flat pixel indices to x and y coordinates
+		indices : array, shape = [n_pixels]
+				flat pixel indices
 	data_spectrum : list[lists], shape = [n_pixels, 2]
 		contains the mzValues as first element
 		and the intensityValues as second element
-		each list element is of shape [n_Values]
+		each element is of individual length [[mzValues, intensityValues]]
+
+	METHODS
+	-------
+	make_data()
+		load the dataspectrum using the imzmlparser into a list of lists
+	apply_global_range()
+		 set the Range variable to the min and max mz-Values of all pixels
+	sumpicture()
+		 calculate the sum of the spectra in each pixel and return as array
+	nearestmzindex(pixel, mz)
+		get the index of the nearest measured mz value for a given mz value
+	getmzint(pixel, mz, resolution, suminres = False)
+		get the intensity of the nearest measured mz value in resolution neighborhood for a given mz value
+	massvec(mz, suminres = False, new_resolution = None)
+		get a vector of the intensitys to the provided mz value in self.resolution or new_resolution in every pixel and optionally sum in the range of the resolution
+	normalize(algorithm = 'tic', return_map = False, peaklist = None, inplace = True, thresholds = [None, None])
+		normalize the unbinned data using specified algorithm 
+	fit_gauss(positions, sigmas, amps, rel_fitrange, maxvalue_factor = 1.1, peak_by_peak = True, parallel = False)
+		fit gauss peaks at positions with sigmas and amps starting-parameters
 	"""
 	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1):
 		super().__init__(filename, resolution, Range, n_processes)
@@ -85,7 +147,7 @@ class rawMALDI(MALDI):
 			self.apply_global_range()
 
 	def make_data(self):
-		"""load the dataspectrum and save the summed intensities as 2D image
+		"""load the dataspectrum using the imzmlparser into a list of lists
 		"""
 		for pixel in self.indices:
 			self.data_spectrum.append(np.array(self.file.getspectrum(pixel)))
@@ -101,7 +163,7 @@ class rawMALDI(MALDI):
 		self.Range = (np.min(mins), np.max(maxs))
 
 	def sumpicture(self):
-		""" calculate the sum of the spectra in each pixel and return as array
+		""" calculate the sum of the spectrum in each pixel and return the resulting vector
 
 		RETURNS
 		-------
@@ -114,25 +176,25 @@ class rawMALDI(MALDI):
 		return sumpicture
 
 	def nearestmzindex(self, pixel, mz):
-		"""get the index of the nearest measured mz value for a given mz value
+		"""get the index of the nearest measured mz value for a given arbitrary mz value in the given pixel
 
 		PARAMETERS
 		----------
 		pixel : int
-			the pixel whose data is accesed
+			the pixel whose data is accessed
 		mz : float
 			the mz value
 
 		RETURNS
 		-------
 		index : int
-			the index closest to the mz value
+			the index of the intensity measurement closest to the mz value
 		"""
 		index = np.abs(self.data_spectrum[pixel][0]-mz).argmin()
 		return index
 
 	def getmzint(self, pixel, mz, resolution, suminres = False):
-		"""get the intensity of the nearest measured mz value in resolution neighborhood for a given mz value
+		"""get the intensity of the nearest measured mz value in a distance defined by resolution for a given mz value
 
 		PARAMETERS
 		----------
@@ -143,7 +205,7 @@ class rawMALDI(MALDI):
 		resolution: float
 			range around the mz-value to search for the nearest value
 		suminres: bool
-			if true all measured intensities in the resolution will be summed, else just the nearest intensity is returned
+			if true all measured intensities in the resolution range will be summed, else just the nearest intensity is returned
 
 		RETURNS
 		-------
@@ -167,14 +229,14 @@ class rawMALDI(MALDI):
 		return intensity
 
 	def massvec(self, mz, suminres = False, new_resolution = None):
-		"""get a vector of the intensitys to the provided mz value in self.resolution or new_resolution in every pixel and optionally sum in the range of the resolution
+		"""get a vector of the intensities to the provided mz value in self.resolution or new_resolution in every pixel and optionally sum in the range of the resolution
 
 		PARAMETERS
 		----------
 		mz : float
 			mz value
 		suminres: bool
-			if true all measured intensities in the resolution will be summed, else just the nearest intensity is returned
+			if true all measured intensities in the resolution range will be summed, else just the nearest intensity is returned
 		new_resolution : float, optional
 			resolution to look for nearest peak. self.resolution is used by default
 
@@ -190,11 +252,11 @@ class rawMALDI(MALDI):
 		return massvec
 
 	def normalize(self, algorithm = 'tic', return_map = False, peaklist = None, inplace = True, thresholds = [None, None]):
-		"""normalize the unbinned data using specified algorithm 
+		"""normalize the data using specified algorithm 
 
 		PARAMETERS
 		----------
-		algorithm : {'tic', 'tic_perpeak', 'ticwindow', median'}
+		algorithm : {'tic', 'ticwindow', 'peaklist', 'tic_perpeak', median'}
 			str specifying the algorithm to use, default is 'tic'
 		return_map : boolean
 			states if the normalization factors for all pixels should be returned as a vector
@@ -208,12 +270,10 @@ class rawMALDI(MALDI):
 		RETURNS
 		-------
 		factor : array, shape = self.indices or selected pixels
-			the normalization factors for all pixels
+			the normalization factors for all pixels, only returned if return_map = True
 		norm_data_spectrum : list[lists], shape = [n_pixels, 2]
 			as data_spectrum but normalized, only returned if inplace = False
 		"""
-		if peaklist:
-			raise NotImplementedError
 		factor = np.empty(len(self.indices))
 		if algorithm == 'tic':
 			for pixel in self.indices:
@@ -234,8 +294,8 @@ class rawMALDI(MALDI):
 		elif algorithm == 'tic_perpeak':
 			for pixel in self.indices:
 				factor[pixel] = self.data_spectrum[pixel][1].sum()/len(self.data_spectrum[pixel][1])
-		elif algorithm == 'median':
-			factor = np.median(self.data_histo[:,peaklist], axis = 1)
+		elif algorithm == 'median':		#TODO implement
+			raise NotImplementedError
 		else:
 			raise NotImplementedError
 		if inplace:
@@ -257,7 +317,7 @@ class rawMALDI(MALDI):
 
 		PARAMETERS
 		----------
-		positions: array, shape = [n_peaks] or [n_peaks, n_pixels]
+		positions: array, shape = [n_peaks] or [n_peaks, n_pixels]		#TODO really implement both cases?
 			the estimated positions of the peaks, may be single list for all spectra or a list for each pixel, along second dim
 		sigmas : array, shape = [n_peaks] or [n_peaks, n_pixels]
 			the estimated sigma of the peaks
@@ -266,7 +326,7 @@ class rawMALDI(MALDI):
 		rel_fitrange : float
 			the relative range around peaks for fitting
 		maxvalue_factor : float
-			the factor with which the fit amplitude is allowed to exceed the maximal value in the data
+			the factor with which the fit amplitude is allowed to exceed the maximal value in the data, default = 1.1
 		peak_by_peak : bool
 			If True fit each peak in fitrange individually, otherwise fit full spectrum, default : True
 		parallel : bool
@@ -276,7 +336,7 @@ class rawMALDI(MALDI):
 		RETURNS
 		-------
 		chi_res : array, shape = [n_pixels]
-			the reduced chi square of the fit
+			the reduced chi squares of the fits
 		amps : array, shape = [n_peaks, n_pixels]
 			the resulting amplitude of each gauss function
 		x0 : array, shape = [n_peaks, n_pixels]
@@ -292,7 +352,6 @@ class rawMALDI(MALDI):
 		"""
 		from lmfit import models,Model
 		def gausss(x, amplitude, center, sigma):
-			#return 1/(sigma*np.sqrt(2*np.pi))*amplitude*np.exp(-((x-center)/sigma)**2/2)
 			return amplitude*np.exp(-((x-center)/sigma)**2/2)
 
 		
@@ -416,7 +475,7 @@ class rawMALDI(MALDI):
 							print('fitting peak ', peak, 'in pixel ', pixel)
 							lower = self.nearestmzindex(pixel, positions[peak] - fitrange[peak])
 							higher = self.nearestmzindex(pixel, positions[peak] + fitrange[peak])
-							if higher - lower < 3:#lower == higher:
+							if higher - lower < 3:
 								print('peak not measured')
 								chi_res[peak,pixel] = None
 								amp[peak,pixel] = None
@@ -426,12 +485,6 @@ class rawMALDI(MALDI):
 								x0_err[peak,pixel] = None
 								sigma_err[peak,pixel] = None
 								continue
-							#elif higher - lower < 3:
-							#	print('not enough indices')
-							#	lower -= 1
-							#	higher += 1
-							#weight = np.sqrt(self.data_spectrum[pixel][1][lower:higher])
-							#weight[self.data_spectrum[pixel][1][lower:higher] == 0] = 1e-32
 							fit = model.fit(x = self.data_spectrum[pixel][0][lower:higher], params = params, data = self.data_spectrum[pixel][1][lower:higher])#, weights = 1/weight)
 							#print(fit.fit_report())
 							if fit.result.params[fit_amp[peak]].value > maxvalue:
@@ -489,12 +542,6 @@ class rawMALDI(MALDI):
 							x0_err[peak,pixel] = None
 							sigma_err[peak,pixel] = None
 							continue
-						#elif higher - lower < 3:
-						#	print('not enough indices')
-						#	lower -= 1
-						#	higher += 1
-						#weight = np.sqrt(self.data_spectrum[pixel][1][lower:higher])
-						#weight[self.data_spectrum[pixel][1][lower:higher] == 0] = 1e-32
 						fit = model.fit(x = self.data_spectrum[pixel][0][lower:higher], params = params, data = self.data_spectrum[pixel][1][lower:higher])#, weights = 1/weight)
 						#print(fit.fit_report())
 						if fit.result.params[fit_amp[peak]].value > maxvalue:
@@ -543,8 +590,6 @@ class rawMALDI(MALDI):
 					model = fullmodel
 					params = fullparams
 
-					#weight = np.sqrt(self.data_spectrum[pixel][1])
-					#weight[self.data_spectrum[pixel][1] == 0] = 1e-32
 					fit = model.fit(x = self.data_spectrum[pixel][0], params = params, data = self.data_spectrum[pixel][1])#, weights = 1/weight)
 					#print(fit.fit_report())
 					if fit.result.params[fit_amp[peak]].value > maxvalue:
@@ -624,18 +669,89 @@ class binnedMALDI(MALDI):
 
 	PARAMETERS
 	----------
+	filename : str
+		the filename
+	resolution : float
+		the relative resolution of any measured mass value
+	Range : tuple
+		the lower and upper limits of mass values
+	n_processes : int
+		number of parallel processes for operations which allow parallelization
+	binned_resolution : float
+		individual replacement for resolution, optional
+	data_histo : array, shape = [n_pixels, n_bins]
+		the non-sparse histogram array, optional, will be calculated fresh if not provided
+	data_spectrum : list[lists], shape = [n_pixels, 2]
+		contains the mzValues as first element
+		and the intensityValues as second element
+		each element is of individual length [[mzValues, intensityValues]]
+		optional, will be calculated fresh if not provided
+	correlation : array,shape = [n_bins, n_bins]
+		correlation between the intensity distribution in the pixels, optional, can be calculated by calling calculate_correlation()
+
+	ATTRIBUTES
+	----------
+	inherited from super class MALDI()
+		filename : str
+			the filename
+		resolution : float
+			the relative resolution of any measured mass value
+		Range : tuple
+			the lower and upper limits of mass values
+		n_processes : int
+			number of parallel processes for operations which allow parallelization
+		file : ImzMLParser object
+			the parser for the imzML data by pyimzml
+		shape : array, shape = [2]
+				the size of the two dimensions
+		map2D : array, shape = [n_pixels, 2]
+				mapping of the flat pixel indices to x and y coordinates
+		indices : array, shape = [n_pixels]
+				flat pixel indices
 	bins : array, shape [n_bins]
-		the binning as in np.arange(min,max,step)
+		the binning of the data in the m/z dimension
 	bincenters : array, shape [n_bins]
 		the centers of the bins
 	data_histo : array, shape = [n_pixels, n_bins]
 		the non-sparse histogram array, defined by bins
 	data_spectrum : list[lists], shape = [n_pixels, 2]
-			contains the mzValues as first element
-			and the intensityValues as second element
-			each list element is of shape [n_Values]
+		contains the mzValues as first element
+		and the intensityValues as second element
+		each element is of individual length [[mzValues, intensityValues]]
 	binned_resolution : float
-		individual replacement for resolution
+		optional individual replacement for resolution
+
+	METHODS
+	-------
+
+	bin_2D(data_spectrum, index = 0)
+		calculate the normalized histogram values acoording to self.bins
+	bin_all(data_spectrum)
+		bin the data for all pixel
+	bin_data()
+		bin all data according to self.binned_resolution and self.Range
+	mzindex(mz)
+		return the bin of a mz value
+	massvec(mz, new_resolution = None)
+		get a vector of the intensitys to the provided mz value in self.binned_resolution or new_resolution in every pixel
+	normalize(algorithm = 'tic', return_map = False, peaklist = None, inplace = True:
+		normalize the binned data using specified algorithm on all or selected pixels
+	peakpick(threshold, method = 'meanad', localmax = True, window = 5, inplace = True)
+		pick the peaks which return a snr value greater than threshold after evaluation using method
+	peakalign(reference = None, reference_params = {'fnction' : np.mean, 'localmax' : True, 'window' : 2}, tol = None):
+		align peaks to a reference or the mean spectrum
+	calculate_correlation()
+		calculate the correlation of all entries in self.data_histo
+	correlatepeaks(refpeak)
+		calculate the correlation between the spatial distribution of a refpeak and all other peaks based on peaks in data_histo
+	plot_mean_spec(peaklist = None)
+		make a nice plot of the mean spectrum of the binned data
+	kmeans(n_clusters)
+		calculate n_clusters using a kmeans algorithm
+	PCA(n_components, standardize = True)
+		calculate the principal components
+	TSNE(n_components)
+		calculate the t-distributed stochastic neighbor embedding
 	"""
 	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1, binned_resolution = None, data_histo = None, data_spectrum = None, correlation = None):
 		super().__init__(filename, resolution, Range, n_processes)
