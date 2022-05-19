@@ -659,7 +659,26 @@ class rawMALDI(MALDI):
 				raise ValueError
 		return chi_res, amp, x0, sigma, amps_err, x0_err, sigma_err
 
+	def center_of_mass(self, massrange = None):
+		"""calculate the center of mass of all spectra in all pixel
 
+		PARAMETERS
+		----------
+		massrange : tuple
+			lower and upper limit of the mass range to consider in center of mass calculation
+		RETURN
+		------
+		com : array, shape = self.indices.shape[0]
+			the center of mass of all pixels
+		"""
+		if massrange is None:
+			massrange = self.Range
+		com = np.zeros(self.indices.shape[0])
+		for pixel in self.indices:
+			massindices = np.nonzero((self.data_spectrum[pixel][0]>massrange[0])&(self.data_spectrum[pixel][0]<massrange[1]))
+			com[pixel] = np.sum(self.data_spectrum[pixel][0][massindices]*self.data_spectrum[pixel][1][massindices])/np.sum(self.data_spectrum[pixel][1][massindices])
+		return com
+		
 class binnedMALDI(MALDI):
 	"""A class for processing binned MALDI data, which allows to load already binned data
 
