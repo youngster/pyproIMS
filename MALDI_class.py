@@ -122,10 +122,6 @@ class rawMALDI(MALDI):
 
 	METHODS
 	-------
-	make_data()
-		load the dataspectrum using the imzmlparser into a list of lists
-	apply_global_range()
-		 set the Range variable to the min and max mz-Values of all pixels
 	sumpicture()
 		 calculate the sum of the spectra in each pixel and return as array
 	nearestmzindex(pixel, mz)
@@ -140,27 +136,27 @@ class rawMALDI(MALDI):
 		fit gauss peaks at positions with sigmas and amps starting-parameters
 	"""
 	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1):
+		def _make_data(self):
+			"""load the dataspectrum using the imzmlparser into a list of lists
+			"""
+			for pixel in self.indices:
+				self.data_spectrum.append(np.array(self.file.getspectrum(pixel)))
+
+		def _apply_global_range(self):
+			""" set the Range variable to the min and max mz-Values of all pixels
+			"""
+			mins = []
+			maxs = []
+			for pixel in self.indices:
+				mins.append(np.min(self.data_spectrum[pixel][0]))
+				maxs.append(np.max(self.data_spectrum[pixel][0]))
+			self.Range = (np.min(mins), np.max(maxs))
+
 		super().__init__(filename, resolution, Range, n_processes)
 		self.data_spectrum = []		#[[mzValues, intensityValues]]
-		self.make_data()
+		self._make_data()
 		if not self.Range:
-			self.apply_global_range()
-
-	def make_data(self):
-		"""load the dataspectrum using the imzmlparser into a list of lists
-		"""
-		for pixel in self.indices:
-			self.data_spectrum.append(np.array(self.file.getspectrum(pixel)))
-
-	def apply_global_range(self):
-		""" set the Range variable to the min and max mz-Values of all pixels
-		"""
-		mins = []
-		maxs = []
-		for pixel in self.indices:
-			mins.append(np.min(self.data_spectrum[pixel][0]))
-			maxs.append(np.max(self.data_spectrum[pixel][0]))
-		self.Range = (np.min(mins), np.max(maxs))
+			self._apply_global_range()
 
 	def sumpicture(self):
 		""" calculate the sum of the spectrum in each pixel and return the resulting vector
@@ -723,10 +719,6 @@ class binnedMALDI(MALDI):
 
 	METHODS
 	-------
-	bin_all(data_spectrum)
-		bin the data for all pixel
-	bin_data()
-		bin all data according to self.binned_resolution and self.Range
 	mzindex(mz)
 		return the bin of an mz value
 	massvec(mz, new_resolution = None)
@@ -751,80 +743,80 @@ class binnedMALDI(MALDI):
 		calculate the t-distributed stochastic neighbor embedding
 	"""
 	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1, binned_resolution = None, data_histo = None, data_spectrum = None, correlation = None):
-		super().__init__(filename, resolution, Range, n_processes)
-		if not binned_resolution:
-			self.binned_resolution = self.resolution
-		else: 
-			self.binned_resolution = binned_resolution
-		self.bin_data()
-		if data_histo is None:
-			if data_spectrum is None:
-				data_spectrum = rawMALDI(self.filename, self.resolution, self.Range, self.n_processes).data_spectrum
-			self.bin_all(data_spectrum)
-		else:
-			self.data_histo = data_histo
-		self.correlation = correlation
 
-	def bin_all(self, data_spectrum):
-		"""bin the data for all pixel"""
-		if self.n_processes >1:
-			def bin_2D_parralel(data_specbins):
-				""""calculate the normalized histogram values according to self.bins parallelized, scaled arbitrary
+		def _bin_all(self, data_spectrum):
+			"""bin the data for all pixel"""
+			if self.n_processes >1:
+				def bin_2D_parralel(data_specbins):
+					""""calculate the normalized histogram values according to self.bins parallelized, scaled arbitrary
 
-				PARAMETERS
-				----------
-				data_specbins : list[lists], shape = [n_pixels, 2]
-				contains the [mzValues, intensityValues] as first element
-				and the bins as second element
+					PARAMETERS
+					----------
+					data_specbins : list[lists], shape = [n_pixels, 2]
+					contains the [mzValues, intensityValues] as first element
+					and the bins as second element
 
-				RETURNS
-				-------
-				n : array, shape = [bins.shape - 1]
-					the histogram values
-				"""
-				n,_ = np.histogram(data_specbins[0][0], bins=data_specbins[1], weights=data_specbins[0][1])
-				return n
-			self.data_specbins = []
-			for pixel in self.indices:
-				self.data_specbins.append([data_spectrum[pixel], self.bins])
-			pool = Pool(self.n_processes)
-			self.data_histo = pool.map(bin_2D_parralel, self.data_specbins)
-			pool.close()
-			pool.join()
-			pool.terminate()
-			pool.restart()
-			self.data_histo = np.array(self.data_histo)
-		else:
-			def bin_2D(self, data_spectrum, index = 0):
-				"""calculate the histogram values according to self.bins, scaled arbitrary
+					RETURNS
+					-------
+					n : array, shape = [bins.shape - 1]
+						the histogram values
+					"""
+					n,_ = np.histogram(data_specbins[0][0], bins=data_specbins[1], weights=data_specbins[0][1])
+					return n
+				self.data_specbins = []
+				for pixel in self.indices:
+					self.data_specbins.append([data_spectrum[pixel], self.bins])
+				pool = Pool(self.n_processes)
+				self.data_histo = pool.map(bin_2D_parralel, self.data_specbins)
+				pool.close()
+				pool.join()
+				pool.terminate()
+				pool.restart()
+				self.data_histo = np.array(self.data_histo)
+			else:
+				def bin_2D(self, data_spectrum, index = 0):
+					"""calculate the histogram values according to self.bins, scaled arbitrary
 
-				PARAMETERS
-				----------
-				data_spectrum : rawMALDI.data_spectrum object
-				contains the mzValues as first element
-				and the intensityValues as second element
-				each element is of individual length [[mzValues, intensityValues]]
-				index : int
-					the index of the pixel to calculate the histogram of
+					PARAMETERS
+					----------
+					data_spectrum : rawMALDI.data_spectrum object
+					contains the mzValues as first element
+					and the intensityValues as second element
+					each element is of individual length [[mzValues, intensityValues]]
+					index : int
+						the index of the pixel to calculate the histogram of
 
-				RETURNS
-				-------
-				n : array, shape = [self.bins.shape - 1]
-					the histogram values
-					
-				"""
-				n,_ = np.histogram(data_spectrum[index][0], bins=self.bins, weights=data_spectrum[index][1])
-				return n
-			for pixel in self.indices:
-				self.data_histo[pixel,:]= bin_2D(data_spectrum, pixel)
+					RETURNS
+					-------
+					n : array, shape = [self.bins.shape - 1]
+						the histogram values
+						
+					"""
+					n,_ = np.histogram(data_spectrum[index][0], bins=self.bins, weights=data_spectrum[index][1])
+					return n
+				for pixel in self.indices:
+					self.data_histo[pixel,:]= bin_2D(data_spectrum, pixel)
 
-	def bin_data(self):
-		"""create bins, bincenters and empty data_histo data according to self.binned_resolution and self.Range
-		"""	
-		numbins = math.log(self.Range[1]/self.Range[0], 1+self.binned_resolution*2)
-		self.bins = self.Range[0]*(1+self.binned_resolution*2)**np.arange(numbins)
-		self.bincenters = np.array([self.bins[i] + (self.bins[i+1]-self.bins[i])/2 for i in range(self.bins.shape[0]-1)])
-		self.data_histo = np.zeros((self.map2D.shape[0],len(self.bins)-1))
+		def _bin_data(self):
+			"""create bins, bincenters and empty data_histo data according to self.binned_resolution and self.Range
+			"""	
+			numbins = math.log(self.Range[1]/self.Range[0], 1+self.binned_resolution*2)
+			self.bins = self.Range[0]*(1+self.binned_resolution*2)**np.arange(numbins)
+			self.bincenters = np.array([self.bins[i] + (self.bins[i+1]-self.bins[i])/2 for i in range(self.bins.shape[0]-1)])
+			self.data_histo = np.zeros((self.map2D.shape[0],len(self.bins)-1))
+			super().__init__(filename, resolution, Range, n_processes)
+			if not binned_resolution:
+				self.binned_resolution = self.resolution
+			else: 
+				self.binned_resolution = binned_resolution
+			self._bin_data()
+			if data_histo is None:
+				if data_spectrum is None:
+					data_spectrum = rawMALDI(self.filename, self.resolution, self.Range, self.n_processes).data_spectrum
+				self._bin_all(data_spectrum)
+			else:
+				self.data_histo = data_histo
+			self.correlation = correlation
 
 	def mzindex(self, mz):
 		"""return the bin of an mz value
