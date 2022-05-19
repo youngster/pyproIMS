@@ -134,6 +134,8 @@ class rawMALDI(MALDI):
 		normalize the data using specified algorithm
 	fit_gauss(positions, sigmas, amps, rel_fitrange, maxvalue_factor = 1.1, peak_by_peak = True, parallel = False)
 		fit gauss peaks at positions with sigmas and amps starting-parameters
+	center_of_mass(massrange = None):
+		calculate the center of mass for each spectra in all pixels
 	"""
 	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1):
 		def _make_data(self):
@@ -660,16 +662,17 @@ class rawMALDI(MALDI):
 		return chi_res, amp, x0, sigma, amps_err, x0_err, sigma_err
 
 	def center_of_mass(self, massrange = None):
-		"""calculate the center of mass of all spectra in all pixel
+		"""calculate the center of mass for each spectra in all pixels
 
 		PARAMETERS
 		----------
 		massrange : tuple
-			lower and upper limit of the mass range to consider in center of mass calculation
+			lower and upper limit of the mass range to consider in center of mass calculation, optional
+
 		RETURN
 		------
 		com : array, shape = self.indices.shape[0]
-			the center of mass of all pixels
+			the center of mass for all pixels
 		"""
 		if massrange is None:
 			massrange = self.Range
@@ -678,7 +681,7 @@ class rawMALDI(MALDI):
 			massindices = np.nonzero((self.data_spectrum[pixel][0]>massrange[0])&(self.data_spectrum[pixel][0]<massrange[1]))
 			com[pixel] = np.sum(self.data_spectrum[pixel][0][massindices]*self.data_spectrum[pixel][1][massindices])/np.sum(self.data_spectrum[pixel][1][massindices])
 		return com
-		
+
 class binnedMALDI(MALDI):
 	"""A class for processing binned MALDI data, which allows to load already binned data
 
