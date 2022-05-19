@@ -58,7 +58,7 @@ class metaspace(object):
 	get_image(dataset_name, database, mz)
 		get a dataset image to adduct
 	"""
-	def __init__(self, dataset_names, databases = ['SwissLipids'], max_fdr = .05, proj_id = '7cee7ac4-4417-11e9-9d77-9bd44815e670', api_key = 'vxBtcaq839qX'):
+	def __init__(self, dataset_names, databases = ['SwissLipids'], max_fdr = .05, proj_id = None, api_key = 'vxBtcaq839qX'):
 		def _create_instance(self, api_key):
 			"""create a SMInstance do load annotation data from METASPACE
 
