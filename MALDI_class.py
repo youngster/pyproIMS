@@ -263,8 +263,8 @@ class rawMALDI(MALDI):
 		peaklist : array-like
 			list of peaks relevant for specific normalization method, optional, depending on method
 		inplace : bool
-			if true self.data_histo is modified and will not be returned
-		threshods : tuple
+			if true self.data_spectrum is modified and will not be returned
+		thresholds : tuple
 			lower and upper threshold for the tic window
 
 		RETURNS
@@ -326,7 +326,7 @@ class rawMALDI(MALDI):
 		rel_fitrange : float
 			the relative range around peaks for fitting
 		maxvalue_factor : float
-			the factor with which the fit amplitude is allowed to exceed the maximal value in the data, default = 1.1
+			the factor with which the fit amplitude is allowed to exceed the maximal value in the data, default : 1.1
 		peak_by_peak : bool
 			If True fit each peak in fitrange individually, otherwise fit full spectrum, default : True
 		parallel : bool
@@ -708,7 +708,7 @@ class binnedMALDI(MALDI):
 				mapping of the flat pixel indices to x and y coordinates
 		indices : array, shape = [n_pixels]
 				flat pixel indices
-	bins : array, shape [n_bins]
+	bins : array, shape [n_bins + 1]
 		the threshold values of the binning of the data in the m/z dimension including lower and upper limits
 	bincenters : array, shape [n_bins]
 		the centers of the bins
@@ -723,7 +723,6 @@ class binnedMALDI(MALDI):
 
 	METHODS
 	-------
-
 	bin_all(data_spectrum)
 		bin the data for all pixel
 	bin_data()
@@ -766,12 +765,11 @@ class binnedMALDI(MALDI):
 			self.data_histo = data_histo
 		self.correlation = correlation
 
-
 	def bin_all(self, data_spectrum):
 		"""bin the data for all pixel"""
 		if self.n_processes >1:
 			def bin_2D_parralel(data_specbins):
-				""""calculate the normalized histogram values according to self.bins parallelized
+				""""calculate the normalized histogram values according to self.bins parallelized, scaled arbitrary
 
 				PARAMETERS
 				----------
@@ -798,7 +796,7 @@ class binnedMALDI(MALDI):
 			self.data_histo = np.array(self.data_histo)
 		else:
 			def bin_2D(self, data_spectrum, index = 0):
-				"""calculate the normalized histogram values according to self.bins
+				"""calculate the histogram values according to self.bins, scaled arbitrary
 
 				PARAMETERS
 				----------
@@ -873,29 +871,30 @@ class binnedMALDI(MALDI):
 		return massvec
 
 	def normalize(self, algorithm = 'tic', return_map = False, peaklist = None, inplace = True):
-		"""normalize the binned data using specified algorithm on all or selected pixels
+		"""normalize the binned data using specified algorithm on all or selected peaks
 
 		PARAMETERS
 		----------
 		algorithm : {'tic', 'median'}
-			str specifying the algorithm to use, default is 'tic'
+			str specifying the algorithm to use, default : 'tic'
 		return_map : boolean
-			states if the normalization factors for all pixels should be returned as a vector
+			states if the normalization factors for all pixels should be returned as a vector, default : False
 		peaklist : array-like
 			list of peaks relevant for specific normalization method, optional, depending on method
 		inplace : bool
-			if true self.data_histo is modified and will not be returned
+			if true self.data_histo is modified and will not be returned, default : True
 
 		RETURNS
 		-------
-		factor : array, shape = self.indices or selected pixels
+		factor : array, shape = self.indices
 			the normalization factors for all pixels
 		norm_histo : array, shape = self.data_histo.shape
 			normalized histo
 		"""
 		if peaklist:
-			raise NotImplementedError
 			peaklist = np.digitze(peaklist, self.bins)
+		else:
+			peaklist = np.arange(len(self.bins)-1)
 		if algorithm == 'tic':
 			factor = np.sum(self.data_histo[:,peaklist], axis = 1)/self.data_histo[:,peaklist].shape[0]
 		elif algorithm == 'median':
@@ -920,12 +919,13 @@ class binnedMALDI(MALDI):
 		----------
 		threshold : float
 			threshold of value for the method for keeping peaks
-		method : {'cardinalmeanad', 'meanad', 'medianad', 'snr', 'freq', 'threshold'}, default: 'meanad'
+		method : {'cardinalmeanad', 'meanad', 'medianad', 'snr', 'freq', 'threshold'}, default : 'meanad'
 			the method to evaulate the peaks
 		localmax : bool
-			if true the local maximum in windows of size window is returned as a peak for the used method
+			if true, before snr calculation, peak candidates are selected as
+			the local maximum in ranges of size window
 		window : int
-			the number of consecutive peaks to consider if localmax is used
+			the number of consecutive bins to consider if localmax is used
 		inplace : bool
 			if true self.data_histo is modified and nothing will be returned
 
@@ -955,12 +955,11 @@ class binnedMALDI(MALDI):
 			raise NotImplementedError
 
 		if nextstep == 'snr':
-			#print(dev.shape)
 			if localmax:		#find peaks in every pixels spectra, filtering by distance between neighboring peaks
 				indexlist = [None] * self.indices.shape[0]
-				for pixel in self.indices:		#KORRR PROBLEM, DASS GGF IN JEDEM PIXEL ANDERS?
+				for pixel in self.indices:
 					#print(pixel)
-					indexlist[pixel], _ = signal.find_peaks(self.data_histo[pixel, :], distance = window//2)		# not identical to R matter::locmax , but almost identical
+					indexlist[pixel], _ = signal.find_peaks(self.data_histo[pixel, :], distance = window//2)		# not identical to R matter::locmax , but similar
 					indexlist[pixel] = indexlist[pixel][(self.data_histo[pixel, indexlist[pixel]]/dev[pixel]) > threshold]
 					peak_histo[pixel, indexlist[pixel]] = self.data_histo[pixel, indexlist[pixel]]
 			else:
@@ -972,21 +971,29 @@ class binnedMALDI(MALDI):
 			return peak_histo
 
 	def peakalign(self, reference = None, reference_params = {'function' : np.mean, 'localmax' : True, 'window' : 2}, tol = None):
-		"""align peaks to a reference or the mean spectrum
+		"""align peaks to a reference or the mean spectrum and return a selectedMALDI object
 
 		PARAMETERS
 		----------
 		reference : array, shape = [n_peaks]
-			reference spectrum, optional
+			reference spectrum, optional, if None reference spectrum will be calculated by reference parameters
 		reference_params : dict
-			parameters for reference calculation
+			parameters for reference calculation {'function' : method, 'localmax' : bool, 'window' : int}
+			function : method which takes self.data_histo and axis = 0 as input arguments
+			and returns a 1-dimensional array
+			e.g. np.mean, np.median, ...
+			localmax : if true, before alignment, peak candidates are selected as
+			the local maximum in ranges of size window
+			window : int
+				the number of consecutive bins to consider if localmax is used
+			default : {'function' : np.mean, 'localmax' : True, 'window' : 2}
 		tol : float
 			tolerance for peak matching, optional
 
 		RETURNS
 		-------
-		aligned_histo : array, shape = [n_pixels, n_reference_peaks]
-			the array containing the intensities, aligned to the reference peaks or the average spectrum, will only be returned if inplace = False
+		selected : selectedMALDI object
+			a object only containing the selected and aligned peaks
 		"""
 
 		if not tol:
@@ -1022,9 +1029,8 @@ class binnedMALDI(MALDI):
 		"""
 		self.correlation = np.corrcoef(np.transpose(self.data_histo))
 
-
 	def correlatepeaks(self, refpeak):
-		"""calculate the correlation between the spatial distribution of a refpeak and all other peaks based on peaks in data_histo
+		"""return the correlation between the spatial distribution of a reference peak and all other peaks based on peaks in data_histo
 		
 		PARAMETERS
 		----------
@@ -1036,25 +1042,21 @@ class binnedMALDI(MALDI):
 		self.correlation[refindex, :] : array
 			the correlation including the refpeak
 		"""
-		if self.correlation is None:		# implement some case, to not calculate over and over again
+		if self.correlation is None:
 			self.calculate_correlation()
 		refindex = np.digitize(refpeak, self.bins)-1
 		return self.correlation[refindex, :]
 
 	def plot_mean_spec(self, peaklist = None):
-		"""make a nice plot of the mean spectrum of the binned data
+		"""make a plot of the mean spectrum of the binned data
 
 		PARAMETERS
 		----------
 		peaklist : array, shape = [n_peaks]
 			a list of peaks to mark in the spectrum
-
-		RETURNS
-		-------
-		mean_spec : array, shape = [n_bins]		
 		"""
-		mean_spec = np.mean(self.data_histo, axis = 0)
 		import matplotlib.pyplot as plt
+		mean_spec = np.mean(self.data_histo, axis = 0)
 		plt.figure(figsize = (7.5,4))
 		plt.plot(self.bincenters, mean_spec, linewidth = 1., color = 'green', label = 'average spectrum')
 		if peaklist is not None:
@@ -1065,7 +1067,7 @@ class binnedMALDI(MALDI):
 		plt.ylabel('intensity/a.u.')
 		plt.legend(loc = 'best')
 		plt.tight_layout()
-
+		plt.show()
 
 	def kmeans(self, n_clusters):
 		"""calculate n_clusters using a kmeans algorithm
@@ -1092,7 +1094,7 @@ class binnedMALDI(MALDI):
 		n_components : int
 			number of components
 		standardize : bool
-			if True, the data will be standardized before fitting the PCA, default = True
+			if True, the data will be standardized before fitting the PCA, default : True
 
 		RETURNS
 		-------
@@ -1137,16 +1139,63 @@ class selectedMALDI(MALDI):
 
 	PARAMETERS
 	----------
+	filename : str
+		the filename
+	resolution : float
+		the relative resolution of any measured mass value
+	Range : tuple
+		the lower and upper limits of mass values
+	n_processes : int
+		number of parallel processes for operations which allow parallelization
 	n_peaks : int
-		the number of selected peaks to store
+		the number of selected peaks
 	selected_resolution : float
-		relative resolution of peaks
+		individual replacement for resolution, optional
 	peakcenters : array, shape = [n_peaks]
-		the m/z values of all peaks
+		the m/z values of the selected peaks, optional
 	peak_histo : array, shape = [n_pixels, n_peaks]
-		the intensities of the peaks in all pixels
+		the intensities of the selected peaks in all pixels, optional
+	correlation : array,shape = [n_bins, n_peaks]
+		correlation between the intensity distribution in the pixels, optional, can be calculated by calling calculate_correlation()
+
+	ATTRIBUTES
+	----------
+	inherited from super class MALDI()
+		filename : str
+			the filename
+		resolution : float
+			the relative resolution of any measured mass value
+		Range : tuple
+			the lower and upper limits of mass values
+		n_processes : int
+			number of parallel processes for operations which allow parallelization
+		file : ImzMLParser object
+			the parser for the imzML data by pyimzml
+		shape : array, shape = [2]
+				the size of the two dimensions
+		map2D : array, shape = [n_pixels, 2]
+				mapping of the flat pixel indices to x and y coordinates
+		indices : array, shape = [n_pixels]
+				flat pixel indices
+	n_peaks : int
+		the number of selected peaks
+	selected_resolution : float
+		individual replacement for resolution, optional
+	peakcenters : array, shape = [n_peaks]
+		the m/z values of the selected peaks, optional
+	peak_histo : array, shape = [n_pixels, n_peaks]
+		the intensities of the selected peaks in all pixels, optional
+
+	METHODS
+	-------
+	nearestpeak(mz)
+		get the index of the nearest measured mz value for a given mz value
+	massvec(mz)
+		get a vector of the intensities to the provided mz value in every pixel
+	correlatepeaks(refpeak)
+		calculate the correlation between the spatial distribution of a refpeak and all other peaks based on peaks in peak_histo
 	"""
-	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1, n_peaks = 0, selected_resolution = None, peakcenters = None, peak_histo = None):
+	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1, n_peaks = 0, selected_resolution = None, peakcenters = None, peak_histo = None, correlation = None):
 		super().__init__(filename, resolution, Range, n_processes)
 		if (peakcenters is None) & (peak_histo is None):
 			self.peakcenters = np.zeros(n_peaks)
@@ -1156,6 +1205,7 @@ class selectedMALDI(MALDI):
 			self.peak_histo = peak_histo
 		if not selected_resolution:
 			self.selected_resolution = self.resolution
+		self.correlation = correlation
 
 	def nearestpeak(self, mz):
 		"""get the index of the nearest measured mz value for a given mz value
@@ -1191,7 +1241,7 @@ class selectedMALDI(MALDI):
 		massvec = np.zeros(self.indices.shape[0])
 		peak = self.nearestpeak(mz)
 		if peak is not None:
-			massvec = self.peak_histo[:,peak]
+			massvec = self.peak_histo[:,peak]		#TODO check if this works with returned None values
 		return massvec
 
 	def correlatepeaks(self, refpeak):
