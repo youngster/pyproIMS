@@ -46,15 +46,15 @@ class metaspace(object):
 	get_urls(self)
 		return a dict including the urls to acces the datasets via the browser interface of METASPACE
 	get_datasets(drop_duplicates = False, sort_by = None)
-		get a dataset from METASPACE
+		get all selected datasets from METASPACE
 	get_dataset(dataset_name, database_id)
-		get a dataset from METASPACE
+		get a single dataset from METASPACE
 	filter_by_group(mygroups)
 		filter the dataset by matching the molecule group in the moleculeNames
 	filter_by(parameters = ['msm'], values = [.8], operators = ['>'])
-		filter the dataset by the givin set of parameters and values
+		filter the dataset by comparing the given set of parameters and values using the operators
 	filter_neighboring_mzs(rrange = 10e-6)
-		remove second of neighboring annotations if mz value is inside the range - works only if sorted by mz
+		remove the second of two neighboring annotations if mz value is inside the range - works only if sorted by mz
 	get_image(dataset_name, database, mz)
 		get a dataset image to adduct
 	"""
