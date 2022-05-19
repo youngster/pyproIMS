@@ -17,6 +17,45 @@ class metaspace(object):
 		id of the project
 	api_key : str
 		key for accessing the data
+
+	ATTRIBUTES
+	----------
+	dataset_names : [str]
+		list of names of datasets (e.g. timestamp)
+	databases : [str]
+		{'HMDB', 'LipidMaps', 'SwissLipids'}
+		list of identifiers of the databases for annotations
+	max_fdr : float
+		maximal false detection rate for dataset loading
+	proj_id : str
+		id of the project
+	api_key : str
+		key for accessing the data
+	database_ids : dict
+		lookup_table for the ids of databases
+		currently 'HMDB', 'LipidMaps', 'SwissLipids' are available
+		others may be looked up on METASPACE URLs
+	base_url : [str]
+		strings neeeded for the URL pattern to access METASPACE data
+
+	METHODS
+	-------
+	create_instance()
+		create a SMInstance do load annotation data from metaspace
+	get_datasets(drop_duplicates = False, sort_by = None)
+		get a dataset from metaspace
+	get_dataset(dataset_name, database_id)
+		get a dataset from metaspace
+	filter_by_group(mygroups)
+		filter the dataset by matching the molecule group in the moleculeNames
+	filter_by(parameters = ['msm'], values = [.8], operators = ['>'])
+		filter the dataset by the givin set of parameters and values
+	filter_neighboring_mzs(rrange = 10e-6)
+		remove second of neighboring annotations if mz value is inside the range - works only if sorted by mz
+	read_data(path)
+		read metaspace annotation data from a stored feather-file
+	get_image(dataset_name, database, mz)
+		get a dataset image to adduct
 	"""
 	def __init__(self, dataset_names, databases = ['SwissLipids'], max_fdr = .05, proj_id = '7cee7ac4-4417-11e9-9d77-9bd44815e670', api_key = 'vxBtcaq839qX'):
 		self.dataset_names = dataset_names
@@ -25,10 +64,7 @@ class metaspace(object):
 		self.max_fdr = max_fdr
 		self.proj_id = proj_id
 		self.api_key = api_key
-
-		self.base_url = ['https://metaspace2020.eu/annotations?' + 'db_id=', '&prj=', '&ds=', '&mz=']
-
-
+		self.base_url = ['https://metaspace2020.eu/annotations?' + 'db_id=', '&prj=', '&ds=', '&mz=']		#TODO still needed?
 
 	def create_instance(self):
 		"""create a SMInstance do load annotation data from metaspace
