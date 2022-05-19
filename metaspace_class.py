@@ -14,7 +14,7 @@ class metaspace(object):
 	max_fdr : float
 		maximal false detection rate for dataset loading
 	proj_id : str
-		id of the project
+		id of the project, optional
 	api_key : str
 		key for accessing the data
 
@@ -27,71 +27,99 @@ class metaspace(object):
 		list of identifiers of the databases for annotations
 	max_fdr : float
 		maximal false detection rate for dataset loading
+	sm : SMInstance
+		instance for accessing METASPACE data
 	proj_id : str
 		id of the project
-	api_key : str
-		key for accessing the data
 	database_ids : dict
 		lookup_table for the ids of databases
 		currently 'HMDB', 'LipidMaps', 'SwissLipids' are available
 		others may be looked up on METASPACE URLs
 	base_url : [str]
 		strings neeeded for the URL pattern to access METASPACE data
+	data : pd.DataFrame
+		Dataframe containing all datasets and their information
+		will be created by calling get_datasets()
 
 	METHODS
 	-------
+	get_urls(self)
+		return a dict including the urls to acces the datasets via the browser interface of METASPACE
 	create_instance()
-		create a SMInstance do load annotation data from metaspace
+		create a SMInstance do load annotation data from METASPACE
 	get_datasets(drop_duplicates = False, sort_by = None)
-		get a dataset from metaspace
+		get a dataset from METASPACE
 	get_dataset(dataset_name, database_id)
-		get a dataset from metaspace
+		get a dataset from METASPACE
 	filter_by_group(mygroups)
 		filter the dataset by matching the molecule group in the moleculeNames
 	filter_by(parameters = ['msm'], values = [.8], operators = ['>'])
 		filter the dataset by the givin set of parameters and values
 	filter_neighboring_mzs(rrange = 10e-6)
 		remove second of neighboring annotations if mz value is inside the range - works only if sorted by mz
-	read_data(path)
-		read metaspace annotation data from a stored feather-file
 	get_image(dataset_name, database, mz)
 		get a dataset image to adduct
 	"""
 	def __init__(self, dataset_names, databases = ['SwissLipids'], max_fdr = .05, proj_id = '7cee7ac4-4417-11e9-9d77-9bd44815e670', api_key = 'vxBtcaq839qX'):
+		def _create_instance(self, api_key):
+			"""create a SMInstance do load annotation data from METASPACE
+
+			PARAMETERS
+			----------
+			api_key : str
+				key for accessing the data
+
+			RETURNS
+			-------
+			sm : SMInstance
+				instance for accessing METASPACE data
+			"""
+			sm = SMInstance(host = 'https://metaspace2020.eu', api_key = api_key)
+			if not sm.logged_in():
+				api_key = getpass.getpass(prompt='API key: ', stream=None)
+				sm.login(api_key=api_key)
+			return sm
+
 		self.dataset_names = dataset_names
-		self.database_ids = {'HMDB' : 22, 'LipidMaps' : 24, 'SwissLipids' : 26}
 		self.databases = databases
 		self.max_fdr = max_fdr
-		self.proj_id = proj_id
-		self.api_key = api_key
+		self.self.sm = create_instance(api_key)
+		self.proj_id = proj_id		#TODO still needed?
+		self.database_ids = {'HMDB' : 22, 'LipidMaps' : 24, 'SwissLipids' : 26}
 		self.base_url = ['https://metaspace2020.eu/annotations?' + 'db_id=', '&prj=', '&ds=', '&mz=']		#TODO still needed?
 
-	def create_instance(self):
-		"""create a SMInstance do load annotation data from metaspace
+	def get_urls(self):
+		""" return a dict including the urls to acces the datasets via the browser interface of METASPACE
 
 		RETURNS
 		-------
-		sm : SMInstance
-			instance for accessing metaspace data
+		urls : dict
+			{dataset_name : {databse_name : url}}
 		"""
-		sm = SMInstance(host = 'https://metaspace2020.eu', api_key = self.api_key)
-		if not sm.logged_in():
-			# Using getpass here prevents the API key from being accidentally saved with this notebook.
-			api_key = getpass.getpass(prompt='API key: ', stream=None)
-			sm.login(api_key=api_key)
-		return sm
+		urls = {}
+		if proj_id:
+			for dataset_name in dataset_names:
+				urls[dataset_name] = {}
+				for database in self.databases:
+					urls[dataset_name][database] = self.base_url[0] + database_ids[database] + self.base_url[1] + proj_id + self.base_url[2] + dataset_name
+		else:
+			for dataset_name in dataset_names:
+				urls[dataset_name] = {}
+				for database in self.databases:
+					urls[dataset_name][database] = self.base_url[0] + database_ids[database] + self.base_url[2] + dataset_name
+		return urls
 
 	def get_datasets(self, drop_duplicates = False, sort_by = None):
-		"""get a dataset from metaspace
+		"""get all selected datasets from METASPACE
 
 		PARAMETERS
 		----------
 		drop_duplicates : Bool
-			if True, than duplicates will be dropped without following a hierachy or averaging in remaining parameters
+			if True, than duplicates will be dropped without following a hierarchy or averaging in remaining parameters, optional default : False
 			#HERE ALL DATABASE INFORMATION IS REMOVED AND RESULTING DUPLICATES WILL BE DROPPED
 			#DIFFERING INFORMATION IN DIMENSIONS SUCH AS MSM FDR INTENSITY WILL BE LOST
 		sort_by_mz : list
-			list of columns to sort by
+			list of columns to sort by, optional
 		"""
 		self.data = pd.DataFrame()
 		for dataset_name in self.dataset_names:
@@ -104,12 +132,12 @@ class metaspace(object):
 			self.data.sort_values(sort_by, inplace = True)
 
 	def get_dataset(self, dataset_name, database_id):
-		"""get a dataset from metaspace
+		"""get a single dataset from METASPACE
 
 		PARAMETERS
 		----------
 		dataset_name : str
-			name of the dataset (e.g. timestampt)
+			name of the dataset (e.g. timestamp)
 		database_id : int
 			integer identifier of the database
 
@@ -118,8 +146,7 @@ class metaspace(object):
 		dataset : DataFrame
 			DataFrame containing the annotation information
 		"""
-		sm = self.create_instance()
-		dataset = sm.dataset(id = dataset_name).results(database = database_id, fdr = self.max_fdr)		#load the dataset
+		dataset = self.sm.dataset(id = dataset_name).results(database = database_id, fdr = self.max_fdr)		#load the dataset
 		dataset['databases'] = database_id		#add a databases tag
 		dataset['dataset'] = dataset_name		#add a dataset tag
 		dataset['n_annotations'] = dataset['mz'].values.shape[0]		#add the number of found annotations on the dataset and the databases
@@ -162,12 +189,11 @@ class metaspace(object):
 					value.append(mygroup in group)
 			return any(value)
 
-		#boolarr = [filtergroups(mygroups, groups) for groups in self.data['moleculeGroups']]
 		boolarr = [filtergroups(mygroups, groups) for groups in self.data['moleculeNames']]
 		self.data = self.data[boolarr]
 
 	def filter_by(self, parameters = ['msm'], values = [.8], operators = ['>']):
-		"""filter the dataset by the givin set of parameters and values
+		"""filter the dataset by comparing the given set of parameters and values using the operators
 
 		PARAMETERS
 		----------
@@ -182,12 +208,12 @@ class metaspace(object):
 			self.data.query(parameter + operator +  str(value), inplace = True)
 
 	def filter_neighboring_mzs(self, rrange = 10e-6):
-		"""remove second of neighboring annotations if mz value is inside the range - works only if sorted by mz
+		"""remove the second of two neighboring annotations if mz value is inside the range - works only if sorted by mz
 
 		PARAMETERS
 		----------
 		rrange : float
-			relative tange in which values are removed
+			relative range in which values are removed
 		"""
 		oldmz = 0
 		for index, row in self.data.iterrows():
@@ -197,24 +223,13 @@ class metaspace(object):
 			else:
 				oldmz = row['mz']
 
-	def read_data(self, path):
-		"""read metaspace annotation data from a stored feather-file
-
-		PARAMETERS
-		----------
-		path : str
-			path to the feather-file
-		"""
-		#self.data = pd.DataFrame()
-		self.data = pd.read_csv(path)
-
 	def get_image(self, dataset_name, database, mz):
 		"""get a dataset image to adduct
 
 		PARAMETERS
 		----------
 		dataset_name : str
-			name of the dataset (e.g. timestampt)
+			name of the dataset (e.g. timestamp)
 		database : str
 			string identifier of the database
 		mz : float
@@ -223,25 +238,23 @@ class metaspace(object):
 		RETURNS
 		-------
 		img : array, shape = [rows, columns]
-			2D-array containing the pixel intensities to the adduct
+			2D-array containing the pixel intensities mz
 		"""
 		if dataset_name in self.data.dataset.values:
-			sm = self.create_instance()
 			if np.array([self.data.mz == mz]).any():
 				formula = self.data.formula[self.data.mz == mz]
 				adduct = self.data.adduct[self.data.mz == mz]
-				img = sm.dataset(id = dataset_name).isotope_images(sf = formula.values[0], adduct = adduct.values[0], only_first_isotope=True)[0]
+				img = self.sm.dataset(id = dataset_name).isotope_images(sf = formula.values[0], adduct = adduct.values[0], only_first_isotope=True)[0]
 				return img
 			else:
-				raise ValueError
+				raise ValueError('mz not annoatated')
 		else:
 			dataset = self.get_dataset(dataset_name, self.database_ids[database])
-			sm = self.create_instance()
 			if np.array([dataset.mz == mz]).any():
 				formula = dataset.formula[dataset.mz == mz]
 				adduct = dataset.adduct[dataset.mz == mz]
-				img = sm.dataset(id = dataset_name).isotope_images(sf = formula.values[0], adduct = adduct.values[0], only_first_isotope=True)[0]
+				img = self.sm.dataset(id = dataset_name).isotope_images(sf = formula.values[0], adduct = adduct.values[0], only_first_isotope=True)[0]
 				return img
 			else:
-				raise ValueError
+				raise ValueError('mz not annoatated')
 
