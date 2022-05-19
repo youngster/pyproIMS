@@ -45,8 +45,6 @@ class metaspace(object):
 	-------
 	get_urls(self)
 		return a dict including the urls to acces the datasets via the browser interface of METASPACE
-	create_instance()
-		create a SMInstance do load annotation data from METASPACE
 	get_datasets(drop_duplicates = False, sort_by = None)
 		get a dataset from METASPACE
 	get_dataset(dataset_name, database_id)
