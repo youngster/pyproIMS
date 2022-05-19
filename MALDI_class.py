@@ -804,19 +804,20 @@ class binnedMALDI(MALDI):
 			self.bins = self.Range[0]*(1+self.binned_resolution*2)**np.arange(numbins)
 			self.bincenters = np.array([self.bins[i] + (self.bins[i+1]-self.bins[i])/2 for i in range(self.bins.shape[0]-1)])
 			self.data_histo = np.zeros((self.map2D.shape[0],len(self.bins)-1))
-			super().__init__(filename, resolution, Range, n_processes)
-			if not binned_resolution:
-				self.binned_resolution = self.resolution
-			else: 
-				self.binned_resolution = binned_resolution
-			self._bin_data()
-			if data_histo is None:
-				if data_spectrum is None:
-					data_spectrum = rawMALDI(self.filename, self.resolution, self.Range, self.n_processes).data_spectrum
-				self._bin_all(data_spectrum)
-			else:
-				self.data_histo = data_histo
-			self.correlation = correlation
+
+		super().__init__(filename, resolution, Range, n_processes)
+		if not binned_resolution:
+			self.binned_resolution = self.resolution
+		else: 
+			self.binned_resolution = binned_resolution
+		self._bin_data()
+		if data_histo is None:
+			if data_spectrum is None:
+				data_spectrum = rawMALDI(self.filename, self.resolution, self.Range, self.n_processes).data_spectrum
+			self._bin_all(data_spectrum)
+		else:
+			self.data_histo = data_histo
+		self.correlation = correlation
 
 	def mzindex(self, mz):
 		"""return the bin of an mz value
@@ -1236,6 +1237,11 @@ class selectedMALDI(MALDI):
 			massvec = self.peak_histo[:,peak]		#TODO check if this works with returned None values
 		return massvec
 
+	def calculate_correlation(self):
+		"""calculate the correlation of all entries in self.peak_histo
+		"""
+		self.correlation = np.corrcoef(np.transpose(self.peak_histo))
+
 	def correlatepeaks(self, refpeak):
 		"""calculate the correlation between the spatial distribution of a refpeak and all other peaks based on peaks in peak_histo
 		
@@ -1252,7 +1258,7 @@ class selectedMALDI(MALDI):
 		refindex = self.nearestpeak(refpeak)
 		if refindex:
 			if not self.correlation:
-				self.correlation = np.corrcoef(self.peak_histo)
+				self.calculate_correlation()
 			return self.correlation[refindex, :]
 		else:
-			raise ValueError
+			raise ValueError('No peak stored in resolution range of mz-value')
