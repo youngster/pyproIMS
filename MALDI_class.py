@@ -123,15 +123,15 @@ class rawMALDI(MALDI):
 	METHODS
 	-------
 	sumpicture()
-		 calculate the sum of the spectra in each pixel and return as array
+		calculate the sum of the spectrum in each pixel and return the resulting vector
 	nearestmzindex(pixel, mz)
-		get the index of the nearest measured mz value for a given mz value
+		get the index of the nearest measured mz value for a given arbitrary mz value in the given pixel
 	getmzint(pixel, mz, resolution, suminres = False)
-		get the intensity of the nearest measured mz value in resolution neighborhood for a given mz value
+		get the intensity of the nearest measured mz value in a distance defined by resolution for a given mz value
 	massvec(mz, suminres = False, new_resolution = None)
 		get a vector of the intensities to the provided mz value in self.resolution or new_resolution in every pixel and optionally sum in the range of the resolution
 	normalize(algorithm = 'tic', return_map = False, peaklist = None, inplace = True, thresholds = [None, None])
-		normalize the unbinned data using specified algorithm 
+		normalize the data using specified algorithm
 	fit_gauss(positions, sigmas, amps, rel_fitrange, maxvalue_factor = 1.1, peak_by_peak = True, parallel = False)
 		fit gauss peaks at positions with sigmas and amps starting-parameters
 	"""
@@ -159,7 +159,7 @@ class rawMALDI(MALDI):
 			self._apply_global_range()
 
 	def sumpicture(self):
-		""" calculate the sum of the spectrum in each pixel and return the resulting vector
+		"""calculate the sum of the spectrum in each pixel and return the resulting vector
 
 		RETURNS
 		-------
@@ -724,17 +724,17 @@ class binnedMALDI(MALDI):
 	massvec(mz, new_resolution = None)
 		get a vector of the intensities to the provided mz value in self.binned_resolution or new_resolution in every pixel
 	normalize(algorithm = 'tic', return_map = False, peaklist = None, inplace = True:
-		normalize the binned data using specified algorithm on all or selected pixels
+		normalize the binned data using specified algorithm on all or selected peaks
 	peakpick(threshold, method = 'meanad', localmax = True, window = 5, inplace = True)
 		pick the peaks which return a snr value greater than threshold after evaluation using method
 	peakalign(reference = None, reference_params = {'fnction' : np.mean, 'localmax' : True, 'window' : 2}, tol = None):
-		align peaks to a reference or the mean spectrum
+		align peaks to a reference or the mean spectrum and return a selectedMALDI object
 	calculate_correlation()
 		calculate the correlation of all entries in self.data_histo
 	correlatepeaks(refpeak)
-		calculate the correlation between the spatial distribution of a refpeak and all other peaks based on peaks in data_histo
+		return the correlation between the spatial distribution of a reference peak and all other peaks based on peaks in data_histo
 	plot_mean_spec(peaklist = None)
-		make a nice plot of the mean spectrum of the binned data
+		make a plot of the mean spectrum of the binned data
 	kmeans(n_clusters)
 		calculate n_clusters using a kmeans algorithm
 	PCA(n_components, standardize = True)
