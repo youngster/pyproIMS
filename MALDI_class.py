@@ -13,7 +13,7 @@ class MALDI(object):
 	PARAMETERS
 	----------
 	filename : str
-		the filename
+		the filename ending in .imzML
 	resolution : float
 		the relative resolution of any measured mass value
 	Range : tuple
@@ -49,7 +49,7 @@ class MALDI(object):
 	"""
 	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1):
 		self.filename = filename
-		self.file = ImzMLParser(self.filename+".imzML")
+		self.file = ImzMLParser(self.filename)
 		self.shape = np.array([self.file.imzmldict['max count of pixels x'], self.file.imzmldict['max count of pixels y']])
 		self.map2D = np.array(self.file.coordinates)[:,:-1]-1		#get x and y indices z index is thrown away as it is non-existent		#minus 1 because some people think counting starts at 1
 		self.indices = np.arange(self.map2D.shape[0])		#flat indeces of whole dataset
@@ -1296,7 +1296,7 @@ class selectedMALDI(MALDI):
 			#mask = np.repeat(init_clusters, self.peak_histo.shape[1], axis = 1)
 			n_init_clusters =  len(np.unique(init_clusters))
 			init_cluster_values = []#np.zeros((n_init_clustersself.peak_histo.shape[1]))
-			for i in np.arange(1,n_init_clusters)
+			for i in np.arange(1,n_init_clusters):
 				init_cluster_values.append(np.mean(peak_histo[init_clusters == i], axis = 0))
 			if n_final_clusters > n_init_clusters:
 				kmeans_remaining = KMeans(n_clusters = n_final_clusters - n_init_clusters, random_state = random_state).fit(self.peak_histo[init_clusters==0, :])
