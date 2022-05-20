@@ -138,13 +138,13 @@ class rawMALDI(MALDI):
 		calculate the center of mass for each spectra in all pixels
 	"""
 	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1):
-		def _make_data(self):
+		def _make_data():
 			"""load the dataspectrum using the imzmlparser into a list of lists
 			"""
 			for pixel in self.indices:
 				self.data_spectrum.append(np.array(self.file.getspectrum(pixel)))
 
-		def _apply_global_range(self):
+		def _apply_global_range():
 			""" set the Range variable to the min and max mz-Values of all pixels
 			"""
 			mins = []
@@ -156,9 +156,9 @@ class rawMALDI(MALDI):
 
 		super().__init__(filename, resolution, Range, n_processes)
 		self.data_spectrum = []		#[[mzValues, intensityValues]]
-		self._make_data()
+		_make_data()
 		if not self.Range:
-			self._apply_global_range()
+			_apply_global_range()
 
 	def sumpicture(self):
 		"""calculate the sum of the spectrum in each pixel and return the resulting vector
@@ -226,7 +226,7 @@ class rawMALDI(MALDI):
 				intensity = self.data_spectrum[pixel][1][minindex]
 		return intensity
 
-	def massvec(self, mz, suminres = False, new_resolution = None):
+	def massvec(self, mz, suminres = True, new_resolution = None):
 		"""get a vector of the intensities to the provided mz value in self.resolution or new_resolution in every pixel and optionally sum in the range of the resolution
 
 		PARAMETERS
@@ -234,7 +234,7 @@ class rawMALDI(MALDI):
 		mz : float
 			mz value
 		suminres: bool
-			if true all measured intensities in the resolution range will be summed, else just the nearest intensity is returned
+			if true all measured intensities in the resolution range will be summed, else just the nearest intensity is returned, default : True
 		new_resolution : float, optional
 			resolution to look for nearest peak. self.resolution is used by default
 
@@ -766,7 +766,7 @@ class binnedMALDI(MALDI):
 	"""
 	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1, binned_resolution = None, data_histo = None, data_spectrum = None, correlation = None):
 
-		def _bin_all(self, data_spectrum):
+		def _bin_all(data_spectrum):
 			"""bin the data for all pixel"""
 			if self.n_processes >1:
 				def bin_2D_parralel(data_specbins):
@@ -796,7 +796,7 @@ class binnedMALDI(MALDI):
 				pool.restart()
 				self.data_histo = np.array(self.data_histo)
 			else:
-				def bin_2D(self, data_spectrum, index = 0):
+				def bin_2D(data_spectrum, index = 0):
 					"""calculate the histogram values according to self.bins, scaled arbitrary
 
 					PARAMETERS
@@ -819,7 +819,7 @@ class binnedMALDI(MALDI):
 				for pixel in self.indices:
 					self.data_histo[pixel,:]= bin_2D(data_spectrum, pixel)
 
-		def _bin_data(self):
+		def _bin_data():
 			"""create bins, bincenters and empty data_histo data according to self.binned_resolution and self.Range
 			"""	
 			numbins = math.log(self.Range[1]/self.Range[0], 1+self.binned_resolution*2)
@@ -827,16 +827,37 @@ class binnedMALDI(MALDI):
 			self.bincenters = np.array([self.bins[i] + (self.bins[i+1]-self.bins[i])/2 for i in range(self.bins.shape[0]-1)])
 			self.data_histo = np.zeros((self.map2D.shape[0],len(self.bins)-1))
 
+		def _apply_global_range(data_spectrum):
+			""" set the Range variable to the min and max mz-Values of all pixels
+
+				PARAMETERS
+				----------
+				data_spectrum : rawMALDI.data_spectrum object
+				contains the mzValues as first element
+				and the intensityValues as second element
+				each element is of individual length [[mzValues, intensityValues]]
+			"""
+			mins = []
+			maxs = []
+			for pixel in self.indices:
+				mins.append(np.min(data_spectrum[pixel][0]))
+				maxs.append(np.max(data_spectrum[pixel][0]))
+			self.Range = (np.min(mins), np.max(maxs))
+
 		super().__init__(filename, resolution, Range, n_processes)
+		if not self.Range:
+			if data_spectrum is None:
+				data_spectrum = rawMALDI(self.filename, self.resolution, self.Range, self.n_processes).data_spectrum
+			_apply_global_range(data_spectrum)
 		if not binned_resolution:
 			self.binned_resolution = self.resolution
 		else: 
 			self.binned_resolution = binned_resolution
-		self._bin_data()
+		_bin_data()
 		if data_histo is None:
 			if data_spectrum is None:
 				data_spectrum = rawMALDI(self.filename, self.resolution, self.Range, self.n_processes).data_spectrum
-			self._bin_all(data_spectrum)
+			_bin_all(data_spectrum)
 		else:
 			self.data_histo = data_histo
 		self.correlation = correlation
