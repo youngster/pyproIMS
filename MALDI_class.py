@@ -1192,8 +1192,6 @@ class selectedMALDI(MALDI):
 				mapping of the flat pixel indices to x and y coordinates
 		indices : array, shape = [n_pixels]
 				flat pixel indices
-	n_peaks : int
-		the number of selected peaks
 	selected_resolution : float
 		individual replacement for resolution, optional
 	peakcenters : array, shape = [n_peaks]
@@ -1284,3 +1282,31 @@ class selectedMALDI(MALDI):
 			return self.correlation[refindex, :]
 		else:
 			raise ValueError('No peak stored in resolution range of mz-value')
+
+	def mask_on(self, n_final_clusters, init_clusters, random_state = None):
+		"""
+
+		PARAMETERS
+		----------
+		init_cluster : array of int, shape = [n_pixels]
+			clusters marked by increasing integer values >0
+		"""
+		from sklearn.cluster import KMeans
+		if init_clusters:
+			#mask = np.repeat(init_clusters, self.peak_histo.shape[1], axis = 1)
+			n_init_clusters =  len(np.unique(init_clusters))
+			init_cluster_values = []#np.zeros((n_init_clustersself.peak_histo.shape[1]))
+			for i in np.arange(1,n_init_clusters)
+				init_cluster_values.append(np.mean(peak_histo[init_clusters == i], axis = 0))
+			if n_final_clusters > n_init_clusters:
+				kmeans_remaining = KMeans(n_clusters = n_final_clusters - n_init_clusters, random_state = random_state).fit(self.peak_histo[init_clusters==0, :])
+				print(len(init_cluster_values))
+				print(kmeans_remaining.cluster_ccenters_.shape)
+				kmeans_final = KMeans(n_clusters = n_final_cluster, init = np.append(init_cluster_values, kmeans_remaining.cluster_ccenters_), random_state = random_state).fit(self.peak_histo)
+			elif n_final_clusters == n_init_clusters:
+				kmeans_final = KMeans(n_clusters = n_final_cluster, init = init_cluster_values, random_state = random_state).fit(self.peak_histo)
+		else:
+			kmeans_final = KMeans(n_clusters = n_final_cluster, random_state = random_state).fit(self.peak_histo)
+		image = kmeans_final.predict(self.peak_histo)
+		return image, kmeans_final
+
