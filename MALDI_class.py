@@ -377,7 +377,7 @@ class rawMALDI(MALDI):
 				if parallel == True:
 					for peak in range(n_peaks):
 						if positions[peak] < self.Range[0]:
-							print('peak' + str(peak) + ' out of range')
+							print('peak ' + str(peak) + ' out of range')
 							for pixel in self.indices:
 								chi_res[peak,pixel] = None
 								amp[peak,pixel] = None
@@ -398,7 +398,7 @@ class rawMALDI(MALDI):
 							lower = self.nearestmzindex(pixel, positions[peak] - fitrange[peak])
 							higher = self.nearestmzindex(pixel, positions[peak] + fitrange[peak])
 							if higher - lower < 3:#lower == higher:
-								print('peak' + str(peak) + ' not measured in pixel ' + str(pixel))
+								print('peak ' + str(peak) + ' not measured in pixel ' + str(pixel))
 								chi_res[peak,pixel] = None
 								amp[peak,pixel] = None
 								x0[peak,pixel] = None
@@ -448,7 +448,7 @@ class rawMALDI(MALDI):
 				else:
 					for peak in range(n_peaks):
 						if positions[peak] < self.Range[0]:
-							print('peak' + str(peak) + ' out of range')
+							print('peak ' + str(peak) + ' out of range')
 							for pixel in self.indices:
 								chi_res[peak,pixel] = None
 								amp[peak,pixel] = None
@@ -475,7 +475,7 @@ class rawMALDI(MALDI):
 							lower = self.nearestmzindex(pixel, positions[peak] - fitrange[peak])
 							higher = self.nearestmzindex(pixel, positions[peak] + fitrange[peak])
 							if higher - lower < 3:
-								print('peak not measured')
+								print('peak ' + str(peak) + ' in pixel ' + str(pixel) + ' not measured')
 								chi_res[peak,pixel] = None
 								amp[peak,pixel] = None
 								x0[peak,pixel] = None
@@ -510,7 +510,7 @@ class rawMALDI(MALDI):
 					n_peaks = np.count_nonzero(positions[:, pixel])
 					for peak in range(n_peaks):
 						if positions[peak] < self.Range[0]:
-							print('peak' + str(peak) + ' out of range')
+							print('peak ' + str(peak) + ' out of range')
 							chi_res[peak,pixel] = None
 							amp[peak,pixel] = None
 							x0[peak,pixel] = None
@@ -533,7 +533,7 @@ class rawMALDI(MALDI):
 						lower = self.nearestmzindex(pixel, positions[peak] - fitrange[peak])
 						higher = self.nearestmzindex(pixel, positions[peak] + fitrange[peak])
 						if higher - lower < 3:#lower == higher:
-							print('peak not measured')
+							print('peak ' + str(peak) + ' in pixel ' + str(pixel) + ' not measured')
 							chi_res[peak,pixel] = None
 							amps[peak,pixel] = None
 							x0[peak,pixel] = None
