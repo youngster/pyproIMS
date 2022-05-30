@@ -390,7 +390,7 @@ class rawMALDI(MALDI):
 						print('adding model for peak ', peak)
 						model = Model(gausss, prefix = prefixes[peak])
 						params = model.make_params()
-						params['amplitude'].set(amps[peak], min = 1)#, max = 60000)
+						params['amplitude'].set(amps[peak], min = maxvalue*1e-6)#, max = 60000)
 						params['center'].set(positions[peak], min = positions[peak] - fitrange[peak], max = positions[peak] + fitrange[peak])
 						params['sigma'].set(sigmas[peak], min = 1e-32)
 						param_list = []
@@ -411,6 +411,7 @@ class rawMALDI(MALDI):
 						def fit_pixelwise(param_list):
 							fit = param_list[3].fit(x = param_list[0], params = param_list[2], data = param_list[1])
 							if fit.result.params['amplitude'].value > maxvalue:
+								print('fitted amplitude exceeds ' + str(maxvalue_factor) + ' maximal measured intensity value - fit of peak ' + str(peak) + ' in pixel ' + str(pixel) + ' aborted')
 								chi_res = None
 								amp = None
 								x0 = None
@@ -466,7 +467,7 @@ class rawMALDI(MALDI):
 						model = Model(gausss, prefix = prefixes[peak])
 
 						params = model.make_params()
-						params[fit_amp[peak]].set(amps[peak], min = 1)#, max = 60000)
+						params[fit_amp[peak]].set(amps[peak], min = maxvalue*1e-6)#, max = 60000)
 						params[fit_x0[peak]].set(positions[peak], min = positions[peak] - fitrange[peak], max = positions[peak] + fitrange[peak])
 						params[fit_sigma[peak]].set(sigmas[peak], min = 1e-32)
 						for pixel in self.indices:
@@ -486,6 +487,7 @@ class rawMALDI(MALDI):
 							fit = model.fit(x = self.data_spectrum[pixel][0][lower:higher], params = params, data = self.data_spectrum[pixel][1][lower:higher])#, weights = 1/weight)
 							#print(fit.fit_report())
 							if fit.result.params[fit_amp[peak]].value > maxvalue:
+								print('fitted amplitude exceeds ' + str(maxvalue_factor) + ' maximal measured intensity value - fit of peak ' + str(peak) + ' in pixel ' + str(pixel) + ' aborted')
 								chi_res[peak,pixel] = None
 								amp[peak,pixel] = None
 								x0[peak,pixel] = None
@@ -525,7 +527,7 @@ class rawMALDI(MALDI):
 
 						model = Model(gausss, prefix = prefixes[peak])
 						params = model.make_params()
-						params[fit_amp[peak]].set(amps[peak], min = 1)#, max = 60000)
+						params[fit_amp[peak]].set(amps[peak], min = maxvalue*1e-6)#, max = 60000)
 						params[fit_x0[peak]].set(positions[peak], min = positions[peak] - fitrange[peak], max = positions[peak] + fitrange[peak])
 						params[fit_sigma[peak]].set(sigmas[peak], min = 1e-32)
 						lower = self.nearestmzindex(pixel, positions[peak] - fitrange[peak])
@@ -543,6 +545,7 @@ class rawMALDI(MALDI):
 						fit = model.fit(x = self.data_spectrum[pixel][0][lower:higher], params = params, data = self.data_spectrum[pixel][1][lower:higher])#, weights = 1/weight)
 						#print(fit.fit_report())
 						if fit.result.params[fit_amp[peak]].value > maxvalue:
+							print('fitted amplitude exceeds ' + str(maxvalue_factor) + ' maximal measured intensity value - fit of peak ' + str(peak) + ' in pixel ' + str(pixel) + ' aborted')
 							chi_res[peak,pixel] = None
 							amp[peak,pixel] = None
 							x0[peak,pixel] = None
@@ -574,7 +577,7 @@ class rawMALDI(MALDI):
 
 					tempmodel = Model(gausss, prefix = prefixes[peak])
 					tempparams = tempmodel.make_params()
-					tempparams[fit_amp[peak]].set(amps[peak], min = 1)#, max = 60000)
+					tempparams[fit_amp[peak]].set(amps[peak], min = maxvalue*1e-6)#, max = 60000)
 					tempparams[fit_x0[peak]].set(positions[peak], min = positions[peak] - fitrange[peak], max = positions[peak] + fitrange[peak])
 					tempparams[fit_sigma[peak]].set(sigmas[peak], min = 1e-32)
 					if fullmodel is None:
@@ -591,6 +594,7 @@ class rawMALDI(MALDI):
 					fit = model.fit(x = self.data_spectrum[pixel][0], params = params, data = self.data_spectrum[pixel][1])#, weights = 1/weight)
 					#print(fit.fit_report())
 					if fit.result.params[fit_amp[peak]].value > maxvalue:
+						print('fitted amplitude exceeds ' + str(maxvalue_factor) + ' maximal measured intensity value - fit of peak ' + str(peak) + ' in pixel ' + str(pixel) + ' aborted')
 						chi_res[pixel] = None
 						for peak in range(n_peaks):
 							amp[peak,pixel] = None
@@ -622,7 +626,7 @@ class rawMALDI(MALDI):
 
 						tempmodel = Model(gausss, prefix = prefixes[peak])
 						tempparams = tempmodel.make_params()
-						tempparams[fit_amp[peak]].set(amps[peak, pixel], min = 1)#, max = 60000)
+						tempparams[fit_amp[peak]].set(amps[peak, pixel], min = maxvalue*1e-6)#, max = 60000)
 						tempparams[fit_x0[peak]].set(positions[peak, pixel], min = positions[peak, pixel] - fitrange[peak, pixel], max = positions[peak, pixel] + fitrange[peak, pixel])
 						tempparams[fit_sigma[peak]].set(sigmas[peak, pixel], min = 1e-32)
 						if fullmodel is None:
@@ -640,6 +644,7 @@ class rawMALDI(MALDI):
 					fit = model.fit(x = self.data_spectrum[pixel][0], params = params, data = self.data_spectrum[pixel][1])#, weights = 1/weight)
 					#print(fit.fit_report())
 					if fit.result.params[fit_amp[peak]].value > maxvalue:
+						print('fitted amplitude exceeds ' + str(maxvalue_factor) + ' maximal measured intensity value - fit of peak ' + str(peak) + ' in pixel ' + str(pixel) + ' aborted')
 						chi_res[pixel] = None
 						for peak in range(n_peaks):
 							amp[peak,pixel] = None
