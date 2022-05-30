@@ -470,7 +470,7 @@ class rawMALDI(MALDI):
 						params[fit_x0[peak]].set(positions[peak], min = positions[peak] - fitrange[peak], max = positions[peak] + fitrange[peak])
 						params[fit_sigma[peak]].set(sigmas[peak], min = 1e-32)
 						for pixel in self.indices:
-							print('fitting peak ', peak, 'in pixel ', pixel)
+							print('fitting peak ', peak, 'in pixel ', pixel, end = '\r')
 							lower = self.nearestmzindex(pixel, positions[peak] - fitrange[peak])
 							higher = self.nearestmzindex(pixel, positions[peak] + fitrange[peak])
 							if higher - lower < 3:
@@ -517,7 +517,7 @@ class rawMALDI(MALDI):
 							x0_err[peak,pixel] = None
 							sigma_err[peak,pixel] = None
 							continue
-						print('fitting peak ', peak, 'in pixel ', pixel)
+						print('fitting peak ', peak, 'in pixel ', pixel, end = '\r')
 						prefixes[peak] = 'PsV_' + str(peak) + '_'
 						fit_amp[peak] = prefixes[peak] +  'amplitude'
 						fit_x0[peak] = prefixes[peak] +  'center'
@@ -584,7 +584,7 @@ class rawMALDI(MALDI):
 						fullmodel += tempmodel
 						fullparams += tempparams
 				for pixel in self.indices:
-					print('fitting model in pixel ', pixel)
+					print('fitting model in pixel ', pixel, end = '\r')
 					model = fullmodel
 					params = fullparams
 
@@ -631,7 +631,7 @@ class rawMALDI(MALDI):
 						else:
 							fullmodel += tempmodel
 							fullparams += tempparams
-					print('fitting model in pixel ', pixel)
+					print('fitting model in pixel ', pixel, end = '\r')
 					model = fullmodel
 					params = fullparams
 
