@@ -371,6 +371,7 @@ class rawMALDI(MALDI):
 		for pixel in self.indices:
 			maxs.append(np.max(self.data_spectrum[pixel][1]))
 		maxvalue = np.max(maxs)*maxvalue_factor
+		center_range = positions*self.resolution
 		if peak_by_peak:
 			chi_res = np.zeros((n_peaks, self.indices.shape[0]))
 			if len(positions.shape) == 1:
@@ -391,8 +392,8 @@ class rawMALDI(MALDI):
 						model = Model(gausss, prefix = prefixes[peak])
 						params = model.make_params()
 						params['amplitude'].set(amps[peak], min = maxvalue*1e-6)#, max = 60000)
-						params['center'].set(positions[peak], min = positions[peak] - fitrange[peak], max = positions[peak] + fitrange[peak])
-						params['sigma'].set(sigmas[peak], min = 1e-32)
+						params['center'].set(positions[peak], min = positions[peak] - center_range[peak], max = positions[peak] + center_range[peak])
+						params['sigma'].set(sigmas[peak], min = 1e-32, max = sigmas[peak]*5)
 						param_list = []
 						for pixel in self.indices:
 							lower = self.nearestmzindex(pixel, positions[peak] - fitrange[peak])
@@ -468,8 +469,8 @@ class rawMALDI(MALDI):
 
 						params = model.make_params()
 						params[fit_amp[peak]].set(amps[peak], min = maxvalue*1e-6)#, max = 60000)
-						params[fit_x0[peak]].set(positions[peak], min = positions[peak] - fitrange[peak], max = positions[peak] + fitrange[peak])
-						params[fit_sigma[peak]].set(sigmas[peak], min = 1e-32)
+						params[fit_x0[peak]].set(positions[peak], min = positions[peak] - center_range[peak], max = positions[peak] + center_range[peak])
+						params[fit_sigma[peak]].set(sigmas[peak], min = 1e-32, max = sigmas[peak]*5)
 						for pixel in self.indices:
 							print('fitting peak ', peak, 'in pixel ', pixel, end = '\r')
 							lower = self.nearestmzindex(pixel, positions[peak] - fitrange[peak])
@@ -528,8 +529,8 @@ class rawMALDI(MALDI):
 						model = Model(gausss, prefix = prefixes[peak])
 						params = model.make_params()
 						params[fit_amp[peak]].set(amps[peak], min = maxvalue*1e-6)#, max = 60000)
-						params[fit_x0[peak]].set(positions[peak], min = positions[peak] - fitrange[peak], max = positions[peak] + fitrange[peak])
-						params[fit_sigma[peak]].set(sigmas[peak], min = 1e-32)
+						params[fit_x0[peak]].set(positions[peak], min = positions[peak] - center_range[peak], max = positions[peak] + center_range[peak])
+						params[fit_sigma[peak]].set(sigmas[peak], min = 1e-32, max = sigmas[peak]*5)
 						lower = self.nearestmzindex(pixel, positions[peak] - fitrange[peak])
 						higher = self.nearestmzindex(pixel, positions[peak] + fitrange[peak])
 						if higher - lower < 3:#lower == higher:
@@ -578,8 +579,8 @@ class rawMALDI(MALDI):
 					tempmodel = Model(gausss, prefix = prefixes[peak])
 					tempparams = tempmodel.make_params()
 					tempparams[fit_amp[peak]].set(amps[peak], min = maxvalue*1e-6)#, max = 60000)
-					tempparams[fit_x0[peak]].set(positions[peak], min = positions[peak] - fitrange[peak], max = positions[peak] + fitrange[peak])
-					tempparams[fit_sigma[peak]].set(sigmas[peak], min = 1e-32)
+					tempparams[fit_x0[peak]].set(positions[peak], min = positions[peak] - center_range[peak], max = positions[peak] + center_range[peak])
+					tempparams[fit_sigma[peak]].set(sigmas[peak], min = 1e-32, max = sigmas[peak]*5)
 					if fullmodel is None:
 						fullmodel = tempmodel
 						fullparams = tempparams
@@ -627,8 +628,8 @@ class rawMALDI(MALDI):
 						tempmodel = Model(gausss, prefix = prefixes[peak])
 						tempparams = tempmodel.make_params()
 						tempparams[fit_amp[peak]].set(amps[peak, pixel], min = maxvalue*1e-6)#, max = 60000)
-						tempparams[fit_x0[peak]].set(positions[peak, pixel], min = positions[peak, pixel] - fitrange[peak, pixel], max = positions[peak, pixel] + fitrange[peak, pixel])
-						tempparams[fit_sigma[peak]].set(sigmas[peak, pixel], min = 1e-32)
+						tempparams[fit_x0[peak]].set(positions[peak, pixel], min = positions[peak, pixel] - center_range[peak, pixel], max = positions[peak, pixel] + center_range[peak, pixel])
+						tempparams[fit_sigma[peak]].set(sigmas[peak, pixel], min = 1e-32, max = sigmas[peak]*5)
 						if fullmodel is None:
 							fullmodel = tempmodel
 							fullparams = tempparams
