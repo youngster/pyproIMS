@@ -315,8 +315,8 @@ class rawMALDI(MALDI):
 
 		PARAMETERS
 		----------
-		positions: array, shape = [n_peaks] or [n_peaks, n_pixels]		#TODO really implement both cases?
-			the estimated positions of the peaks, may be single list for all spectra or a list for each pixel, along second dim
+		positions: array, shape = [n_peaks]
+			the estimated positions of the peaks, may be single list for all spectra
 		sigmas : array, shape = [n_peaks] or [n_peaks, n_pixels]
 			the estimated sigma of the peaks
 		amps : array, shape = [n_peaks] or [n_peaks, n_pixels]
@@ -352,7 +352,6 @@ class rawMALDI(MALDI):
 		def gausss(x, amplitude, center, sigma):
 			return amplitude*np.exp(-((x-center)/sigma)**2/2)
 
-		
 		fitrange = positions*rel_fitrange
 		n_peaks = positions.shape[0]
 		amp = np.zeros((n_peaks, self.indices.shape[0]))
@@ -372,299 +371,137 @@ class rawMALDI(MALDI):
 			maxs.append(np.max(self.data_spectrum[pixel][1]))
 		maxvalue = np.max(maxs)*maxvalue_factor
 		center_range = positions*self.resolution
-		if peak_by_peak:
-			chi_res = np.zeros((n_peaks, self.indices.shape[0]))
-			if len(positions.shape) == 1:
-				if parallel == True:
-					for peak in range(n_peaks):
-						if positions[peak] < self.Range[0]:
-							print('peak ' + str(peak) + ' out of range')
-							for pixel in self.indices:
-								chi_res[peak,pixel] = None
-								amp[peak,pixel] = None
-								x0[peak,pixel] = None
-								sigma[peak,pixel] = None
-								amps_err[peak,pixel] = None
-								x0_err[peak,pixel] = None
-								sigma_err[peak,pixel] = None
-							continue
-						print('adding model for peak ', peak)
-						model = Model(gausss, prefix = prefixes[peak])
-						params = model.make_params()
-						params['amplitude'].set(amps[peak], min = maxvalue*1e-6)#, max = 60000)
-						params['center'].set(positions[peak], min = positions[peak] - center_range[peak], max = positions[peak] + center_range[peak])
-						params['sigma'].set(sigmas[peak], min = 1e-32, max = sigmas[peak]*5)
-						param_list = []
-						for pixel in self.indices:
-							lower = self.nearestmzindex(pixel, positions[peak] - fitrange[peak])
-							higher = self.nearestmzindex(pixel, positions[peak] + fitrange[peak])
-							if higher - lower < 3:#lower == higher:
-								print('peak ' + str(peak) + ' not measured in pixel ' + str(pixel))
-								chi_res[peak,pixel] = None
-								amp[peak,pixel] = None
-								x0[peak,pixel] = None
-								sigma[peak,pixel] = None
-								amps_err[peak,pixel] = None
-								x0_err[peak,pixel] = None
-								sigma_err[peak,pixel] = None
-								continue
-							param_list.append([self.data_spectrum[pixel][0][lower:higher], self.data_spectrum[pixel][1][lower:higher], params, model])
-						def fit_pixelwise(param_list):
-							fit = param_list[3].fit(x = param_list[0], params = param_list[2], data = param_list[1])
-							if fit.result.params['amplitude'].value > maxvalue:
-								print('fitted amplitude exceeds ' + str(maxvalue_factor) + ' maximal measured intensity value - fit of peak ' + str(peak) + ' in pixel ' + str(pixel) + ' aborted')
-								chi_res = None
-								amp = None
-								x0 = None
-								sigma = None
-								amps_err = None
-								x0_err = None
-								sigma_err = None
-							else:
-								chi_res = fit.redchi	
-								amp = fit.result.params['amplitude'].value
-								x0 = fit.result.params['center'].value
-								sigma = fit.result.params['sigma'].value
-								amps_err = fit.result.params['amplitude'].stderr
-								x0_err = fit.result.params['center'].stderr
-								sigma_err = fit.result.params['sigma'].stderr
-							return [chi_res, amp, x0, sigma, amps_err, x0_err, sigma_err]
-						if len(param_list)>0:
-							pool = Pool(self.n_processes)
-							fit_results = pool.map(fit_pixelwise, param_list)
-							pool.close()
-							pool.join()
-							pool.terminate()
-							pool.restart()
-							fit_results = np.array(fit_results)
-
-							nonnan = np.nonzero(~np.isnan(chi_res[peak,:]))[0]
-							chi_res[peak,nonnan] = fit_results[:,0]
-							amp[peak,nonnan] = fit_results[:,1]
-							x0[peak,nonnan] = fit_results[:,2]
-							sigma[peak,nonnan] = fit_results[:,3]
-							amps_err[peak,nonnan] = fit_results[:,4]
-							x0_err[peak,nonnan] = fit_results[:,5]
-							sigma_err[peak,nonnan] = fit_results[:,6]
+		chi_res = np.zeros((n_peaks, self.indices.shape[0]))
+		failed_pixels = [[] for _ in range(n_peaks)]
+		if parallel == True:
+			def _fit_pixelwise(param_list):
+				fit = param_list[3].fit(x = param_list[0], params = param_list[2], data = param_list[1])
+				if fit.result.params['amplitude'].value > maxvalue:
+					chi_res = None
+					amp = None
+					x0 = None
+					sigma = None
+					amps_err = None
+					x0_err = None
+					sigma_err = None
 				else:
-					for peak in range(n_peaks):
-						if positions[peak] < self.Range[0]:
-							print('peak ' + str(peak) + ' out of range')
-							for pixel in self.indices:
-								chi_res[peak,pixel] = None
-								amp[peak,pixel] = None
-								x0[peak,pixel] = None
-								sigma[peak,pixel] = None
-								amps_err[peak,pixel] = None
-								x0_err[peak,pixel] = None
-								sigma_err[peak,pixel] = None
-							continue
-						print('adding model for peak ', peak)
-						prefixes[peak] = 'PsV_' + str(peak) + '_'
-						fit_amp[peak] = prefixes[peak] +  'amplitude'
-						fit_x0[peak] = prefixes[peak] +  'center'
-						fit_sigma[peak] = prefixes[peak] +  'sigma'
-
-						model = Model(gausss, prefix = prefixes[peak])
-
-						params = model.make_params()
-						params[fit_amp[peak]].set(amps[peak], min = maxvalue*1e-6)#, max = 60000)
-						params[fit_x0[peak]].set(positions[peak], min = positions[peak] - center_range[peak], max = positions[peak] + center_range[peak])
-						params[fit_sigma[peak]].set(sigmas[peak], min = 1e-32, max = sigmas[peak]*5)
-						for pixel in self.indices:
-							print('fitting peak ', peak, 'in pixel ', pixel, end = '\r')
-							lower = self.nearestmzindex(pixel, positions[peak] - fitrange[peak])
-							higher = self.nearestmzindex(pixel, positions[peak] + fitrange[peak])
-							if higher - lower < 3:
-								print('peak ' + str(peak) + ' in pixel ' + str(pixel) + ' not measured')
-								chi_res[peak,pixel] = None
-								amp[peak,pixel] = None
-								x0[peak,pixel] = None
-								sigma[peak,pixel] = None
-								amps_err[peak,pixel] = None
-								x0_err[peak,pixel] = None
-								sigma_err[peak,pixel] = None
-								continue
-							fit = model.fit(x = self.data_spectrum[pixel][0][lower:higher], params = params, data = self.data_spectrum[pixel][1][lower:higher])#, weights = 1/weight)
-							#print(fit.fit_report())
-							if fit.result.params[fit_amp[peak]].value > maxvalue:
-								print('fitted amplitude exceeds ' + str(maxvalue_factor) + ' maximal measured intensity value - fit of peak ' + str(peak) + ' in pixel ' + str(pixel) + ' aborted')
-								chi_res[peak,pixel] = None
-								amp[peak,pixel] = None
-								x0[peak,pixel] = None
-								sigma[peak,pixel] = None
-								amps_err[peak,pixel] = None
-								x0_err[peak,pixel] = None
-								sigma_err[peak,pixel] = None
-							else:
-								chi_res[peak,pixel] = fit.redchi	
-								amp[peak,pixel] = fit.result.params[fit_amp[peak]].value
-								x0[peak,pixel] = fit.result.params[fit_x0[peak]].value
-								sigma[peak,pixel] = fit.result.params[fit_sigma[peak]].value
-								amps_err[peak,pixel] = fit.result.params[fit_amp[peak]].stderr
-								x0_err[peak,pixel] = fit.result.params[fit_x0[peak]].stderr
-								sigma_err[peak,pixel] = fit.result.params[fit_sigma[peak]].stderr
-			elif len(positions.shape) == 2:
-				if parallel == True:
-					raise NotImplementedError
+					chi_res = fit.redchi	
+					amp = fit.result.params['amplitude'].value
+					x0 = fit.result.params['center'].value
+					sigma = fit.result.params['sigma'].value
+					amps_err = fit.result.params['amplitude'].stderr
+					x0_err = fit.result.params['center'].stderr
+					sigma_err = fit.result.params['sigma'].stderr
+				return [chi_res, amp, x0, sigma, amps_err, x0_err, sigma_err]
+			for peak in range(n_peaks):
+				if positions[peak] < self.Range[0]:
+					print('peak ' + str(peak) + ' out of range')
+					for pixel in self.indices:
+						chi_res[peak,pixel] = None
+						amp[peak,pixel] = None
+						x0[peak,pixel] = None
+						sigma[peak,pixel] = None
+						amps_err[peak,pixel] = None
+						x0_err[peak,pixel] = None
+						sigma_err[peak,pixel] = None
+					continue
+				print('\nadding model for peak ', peak)
+				model = Model(gausss, prefix = prefixes[peak])
+				params = model.make_params()
+				params['amplitude'].set(amps[peak], min = maxvalue*1e-6)#, max = 60000)
+				params['center'].set(positions[peak], min = positions[peak] - center_range[peak], max = positions[peak] + center_range[peak])
+				params['sigma'].set(sigmas[peak], min = 1e-32, max = sigmas[peak]*5)
+				param_list = []
 				for pixel in self.indices:
-					n_peaks = np.count_nonzero(positions[:, pixel])
-					for peak in range(n_peaks):
-						if positions[peak] < self.Range[0]:
-							print('peak ' + str(peak) + ' out of range')
-							chi_res[peak,pixel] = None
-							amp[peak,pixel] = None
-							x0[peak,pixel] = None
-							sigma[peak,pixel] = None
-							amps_err[peak,pixel] = None
-							x0_err[peak,pixel] = None
-							sigma_err[peak,pixel] = None
-							continue
-						print('fitting peak ', peak, 'in pixel ', pixel, end = '\r')
-						prefixes[peak] = 'PsV_' + str(peak) + '_'
-						fit_amp[peak] = prefixes[peak] +  'amplitude'
-						fit_x0[peak] = prefixes[peak] +  'center'
-						fit_sigma[peak] = prefixes[peak] +  'sigma'
+					lower = self.nearestmzindex(pixel, positions[peak] - fitrange[peak])
+					higher = self.nearestmzindex(pixel, positions[peak] + fitrange[peak])
+					if higher - lower < 3:#lower == higher:
+						failed_pixels[peak].append(pixel)
+						chi_res[peak,pixel] = None
+						amp[peak,pixel] = None
+						x0[peak,pixel] = None
+						sigma[peak,pixel] = None
+						amps_err[peak,pixel] = None
+						x0_err[peak,pixel] = None
+						sigma_err[peak,pixel] = None
+						continue
+					print('peak ' + str(peak) + ' not measured in pixels ' + str(failed_pixels[peak]), end = '\r')
+					param_list.append([self.data_spectrum[pixel][0][lower:higher], self.data_spectrum[pixel][1][lower:higher], params, model])
+				if len(param_list)>0:
+					pool = Pool(self.n_processes)
+					fit_results = pool.map(_fit_pixelwise, param_list)
+					pool.close()
+					pool.join()
+					pool.terminate()
+					pool.restart()
+					fit_results = np.array(fit_results)
 
-						model = Model(gausss, prefix = prefixes[peak])
-						params = model.make_params()
-						params[fit_amp[peak]].set(amps[peak], min = maxvalue*1e-6)#, max = 60000)
-						params[fit_x0[peak]].set(positions[peak], min = positions[peak] - center_range[peak], max = positions[peak] + center_range[peak])
-						params[fit_sigma[peak]].set(sigmas[peak], min = 1e-32, max = sigmas[peak]*5)
-						lower = self.nearestmzindex(pixel, positions[peak] - fitrange[peak])
-						higher = self.nearestmzindex(pixel, positions[peak] + fitrange[peak])
-						if higher - lower < 3:#lower == higher:
-							print('peak ' + str(peak) + ' in pixel ' + str(pixel) + ' not measured')
-							chi_res[peak,pixel] = None
-							amps[peak,pixel] = None
-							x0[peak,pixel] = None
-							sigma[peak,pixel] = None
-							amps_err[peak,pixel] = None
-							x0_err[peak,pixel] = None
-							sigma_err[peak,pixel] = None
-							continue
-						fit = model.fit(x = self.data_spectrum[pixel][0][lower:higher], params = params, data = self.data_spectrum[pixel][1][lower:higher])#, weights = 1/weight)
-						#print(fit.fit_report())
-						if fit.result.params[fit_amp[peak]].value > maxvalue:
-							print('fitted amplitude exceeds ' + str(maxvalue_factor) + ' maximal measured intensity value - fit of peak ' + str(peak) + ' in pixel ' + str(pixel) + ' aborted')
-							chi_res[peak,pixel] = None
-							amp[peak,pixel] = None
-							x0[peak,pixel] = None
-							sigma[peak,pixel] = None
-							amps_err[peak,pixel] = None
-							x0_err[peak,pixel] = None
-							sigma_err[peak,pixel] = None
-						else:
-							chi_res[peak,pixel] = fit.redchi	
-							amp[peak,pixel] = fit.result.params[fit_amp[peak]].value
-							x0[peak,pixel] = fit.result.params[fit_x0[peak]].value
-							sigma[peak,pixel] = fit.result.params[fit_sigma[peak]].value
-							amps_err[peak,pixel] = fit.result.params[fit_amp[peak]].stderr
-							x0_err[peak,pixel] = fit.result.params[fit_x0[peak]].stderr
-							sigma_err[peak,pixel] = fit.result.params[fit_sigma[peak]].stderr
-			else:
-				raise ValueError
+					nonnan = np.nonzero(~np.isnan(chi_res[peak,:]))[0]
+					chi_res[peak,nonnan] = fit_results[:,0]
+					amp[peak,nonnan] = fit_results[:,1]
+					x0[peak,nonnan] = fit_results[:,2]
+					sigma[peak,nonnan] = fit_results[:,3]
+					amps_err[peak,nonnan] = fit_results[:,4]
+					x0_err[peak,nonnan] = fit_results[:,5]
+					sigma_err[peak,nonnan] = fit_results[:,6]
 		else:
-			if parallel == True:
-				raise NotImplementedError
-			chi_res = np.zeros((self.indices.shape[0]))
-			if len(positions.shape) == 1:
-				for peak in range(n_peaks):
-					print('adding model for peak ', peak)
-					prefixes[peak] = 'PsV_' + str(peak) + '_'
-					fit_amp[peak] = prefixes[peak] +  'amplitude'
-					fit_x0[peak] = prefixes[peak] +  'center'
-					fit_sigma[peak] = prefixes[peak] +  'sigma'
-
-					tempmodel = Model(gausss, prefix = prefixes[peak])
-					tempparams = tempmodel.make_params()
-					tempparams[fit_amp[peak]].set(amps[peak], min = maxvalue*1e-6)#, max = 60000)
-					tempparams[fit_x0[peak]].set(positions[peak], min = positions[peak] - center_range[peak], max = positions[peak] + center_range[peak])
-					tempparams[fit_sigma[peak]].set(sigmas[peak], min = 1e-32, max = sigmas[peak]*5)
-					if fullmodel is None:
-						fullmodel = tempmodel
-						fullparams = tempparams
-					else:
-						fullmodel += tempmodel
-						fullparams += tempparams
+			for peak in range(n_peaks):
+				if positions[peak] < self.Range[0]:
+					print('peak ' + str(peak) + ' out of range')
+					for pixel in self.indices:
+						chi_res[peak,pixel] = None
+						amp[peak,pixel] = None
+						x0[peak,pixel] = None
+						sigma[peak,pixel] = None
+						amps_err[peak,pixel] = None
+						x0_err[peak,pixel] = None
+						sigma_err[peak,pixel] = None
+					continue
+				print('\nadding model for peak ', peak)
+				prefixes[peak] = 'PsV_' + str(peak) + '_'
+				fit_amp[peak] = prefixes[peak] +  'amplitude'
+				fit_x0[peak] = prefixes[peak] +  'center'
+				fit_sigma[peak] = prefixes[peak] +  'sigma'
+				model = Model(gausss, prefix = prefixes[peak])
+				params = model.make_params()
+				params[fit_amp[peak]].set(amps[peak], min = maxvalue*1e-6)#, max = 60000)
+				params[fit_x0[peak]].set(positions[peak], min = positions[peak] - center_range[peak], max = positions[peak] + center_range[peak])
+				params[fit_sigma[peak]].set(sigmas[peak], min = 1e-32, max = sigmas[peak]*5)
 				for pixel in self.indices:
-					print('fitting model in pixel ', pixel, end = '\r')
-					model = fullmodel
-					params = fullparams
-
-					fit = model.fit(x = self.data_spectrum[pixel][0], params = params, data = self.data_spectrum[pixel][1])#, weights = 1/weight)
+					print('fitting peak ', peak, 'in pixel ', pixel, ' | failed pixels: ', failed_pixels[peak], end = '\r')
+					lower = self.nearestmzindex(pixel, positions[peak] - fitrange[peak])
+					higher = self.nearestmzindex(pixel, positions[peak] + fitrange[peak])
+					if higher - lower < 3:
+						#print('peak ' + str(peak) + ' in pixel ' + str(pixel) + ' not measured')
+						failed_pixels[peak].append(pixel)
+						chi_res[peak,pixel] = None
+						amp[peak,pixel] = None
+						x0[peak,pixel] = None
+						sigma[peak,pixel] = None
+						amps_err[peak,pixel] = None
+						x0_err[peak,pixel] = None
+						sigma_err[peak,pixel] = None
+						continue
+					fit = model.fit(x = self.data_spectrum[pixel][0][lower:higher], params = params, data = self.data_spectrum[pixel][1][lower:higher])#, weights = 1/weight)
 					#print(fit.fit_report())
 					if fit.result.params[fit_amp[peak]].value > maxvalue:
-						print('fitted amplitude exceeds ' + str(maxvalue_factor) + ' maximal measured intensity value - fit of peak ' + str(peak) + ' in pixel ' + str(pixel) + ' aborted')
-						chi_res[pixel] = None
-						for peak in range(n_peaks):
-							amp[peak,pixel] = None
-							x0[peak,pixel] = None
-							sigma[peak,pixel] = None
-							amps_err[peak,pixel] = None
-							x0_err[peak,pixel] = None
-							sigma_err[peak,pixel] = None
+						#print('fitted amplitude exceeds ' + str(maxvalue_factor) + ' maximal measured intensity value - fit of peak ' + str(peak) + ' in pixel ' + str(pixel) + ' aborted')
+						failed_pixels[peak].append(pixel)
+						chi_res[peak,pixel] = None
+						amp[peak,pixel] = None
+						x0[peak,pixel] = None
+						sigma[peak,pixel] = None
+						amps_err[peak,pixel] = None
+						x0_err[peak,pixel] = None
+						sigma_err[peak,pixel] = None
 					else:
-						chi_res[pixel] = fit.redchi	
-						for peak in range(n_peaks):
-							amp[peak,pixel] = fit.result.params[fit_amp[peak]].value
-							x0[peak,pixel] = fit.result.params[fit_x0[peak]].value
-							sigma[peak,pixel] = fit.result.params[fit_sigma[peak]].value
-							amps_err[peak,pixel] = fit.result.params[fit_amp[peak]].stderr
-							x0_err[peak,pixel] = fit.result.params[fit_x0[peak]].stderr
-							sigma_err[peak,pixel] = fit.result.params[fit_sigma[peak]].stderr
-
-			elif len(positions.shape) == 2:
-				###MAYBE BETTER WORK WITH NANS INSTEAD OF ZEROS
-				for pixel in self.indices:
-					n_peaks = np.count_nonzero(positions[:, pixel])
-					for peak in range(n_peaks):
-						print('adding model for peak ', peak)
-						prefixes[peak] = 'PsV_' + str(peak) + '_'
-						fit_amp[peak] = prefixes[peak] +  'amplitude'
-						fit_x0[peak] = prefixes[peak] +  'center'
-						fit_sigma[peak] = prefixes[peak] +  'sigma'
-
-						tempmodel = Model(gausss, prefix = prefixes[peak])
-						tempparams = tempmodel.make_params()
-						tempparams[fit_amp[peak]].set(amps[peak, pixel], min = maxvalue*1e-6)#, max = 60000)
-						tempparams[fit_x0[peak]].set(positions[peak, pixel], min = positions[peak, pixel] - center_range[peak, pixel], max = positions[peak, pixel] + center_range[peak, pixel])
-						tempparams[fit_sigma[peak]].set(sigmas[peak, pixel], min = 1e-32, max = sigmas[peak]*5)
-						if fullmodel is None:
-							fullmodel = tempmodel
-							fullparams = tempparams
-						else:
-							fullmodel += tempmodel
-							fullparams += tempparams
-					print('fitting model in pixel ', pixel, end = '\r')
-					model = fullmodel
-					params = fullparams
-
-					#weight = np.sqrt(self.data_spectrum[pixel][1])
-					#weight[self.data_spectrum[pixel][1] == 0] = 1e-32
-					fit = model.fit(x = self.data_spectrum[pixel][0], params = params, data = self.data_spectrum[pixel][1])#, weights = 1/weight)
-					#print(fit.fit_report())
-					if fit.result.params[fit_amp[peak]].value > maxvalue:
-						print('fitted amplitude exceeds ' + str(maxvalue_factor) + ' maximal measured intensity value - fit of peak ' + str(peak) + ' in pixel ' + str(pixel) + ' aborted')
-						chi_res[pixel] = None
-						for peak in range(n_peaks):
-							amp[peak,pixel] = None
-							x0[peak,pixel] = None
-							sigma[peak,pixel] = None
-							amps_err[peak,pixel] = None
-							x0_err[peak,pixel] = None
-							sigma_err[peak,pixel] = None
-					else:
-						chi_res[pixel] = fit.redchi	
-						for peak in range(n_peaks):
-							amp[peak,pixel] = fit.result.params[fit_amp[peak]].value
-							x0[peak,pixel] = fit.result.params[fit_x0[peak]].value
-							sigma[peak,pixel] = fit.result.params[fit_sigma[peak]].value
-							amps_err[peak,pixel] = fit.result.params[fit_amp[peak]].stderr
-							x0_err[peak,pixel] = fit.result.params[fit_x0[peak]].stderr
-							sigma_err[peak,pixel] = fit.result.params[fit_sigma[peak]].stderr
-			else:
-				raise ValueError
+						chi_res[peak,pixel] = fit.redchi	
+						amp[peak,pixel] = fit.result.params[fit_amp[peak]].value
+						x0[peak,pixel] = fit.result.params[fit_x0[peak]].value
+						sigma[peak,pixel] = fit.result.params[fit_sigma[peak]].value
+						amps_err[peak,pixel] = fit.result.params[fit_amp[peak]].stderr
+						x0_err[peak,pixel] = fit.result.params[fit_x0[peak]].stderr
+						sigma_err[peak,pixel] = fit.result.params[fit_sigma[peak]].stderr
 		return chi_res, amp, x0, sigma, amps_err, x0_err, sigma_err
 
 	def center_of_mass(self, massrange = None):
