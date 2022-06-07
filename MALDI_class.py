@@ -310,7 +310,7 @@ class rawMALDI(MALDI):
 			else:
 				return norm_data_spectrum
 
-	def fit_gauss(self, positions, sigmas, amps, rel_fitrange, maxvalue_factor = 1.1):
+	def fit_gauss(self, positions, sigmas, amps, rel_fitrange, maxvalue_factor = 1.1, rsquared_thresh = .8, retries = 3):
 		"""fit gauss peaks at positions with sigmas and amps starting-parameters
 
 		PARAMETERS
@@ -325,6 +325,10 @@ class rawMALDI(MALDI):
 			the relative range around peaks for fitting
 		maxvalue_factor : float
 			the factor with which the fit amplitude is allowed to exceed the maximal value in the data, default : 1.1
+		rsquared_thresh : float
+			a threshold for the rsquared value of the fit to accept the fit. If the fit is not accepted, it will be retried retries times
+		retries : int
+			the number of retries to do if the rsquared threshold is not satisfied
 
 		RETURNS
 		-------
@@ -347,24 +351,21 @@ class rawMALDI(MALDI):
 		def _gausss(x, amplitude, center, sigma):
 			return amplitude*np.exp(-((x-center)/sigma)**2/2)
 		def _fit_pixelwise(param_list):
-			fit = param_list[3].fit(x = param_list[0], params = param_list[2], data = param_list[1])
-			if fit.result.params['amplitude'].value > maxvalue:
-				chi_res = None
-				amp = None
-				x0 = None
-				sigma = None
-				amps_err = None
-				x0_err = None
-				sigma_err = None
-			else:
-				chi_res = fit.redchi	
-				amp = fit.result.params['amplitude'].value
-				x0 = fit.result.params['center'].value
-				sigma = fit.result.params['sigma'].value
-				amps_err = fit.result.params['amplitude'].stderr
-				x0_err = fit.result.params['center'].stderr
-				sigma_err = fit.result.params['sigma'].stderr
-			return [chi_res, amp, x0, sigma, amps_err, x0_err, sigma_err]
+			rsquared = param_list[4] -1
+			count = 0
+			while rsquared_not_reached:
+				fit = param_list[3].fit(x = param_list[0], params = param_list[2], data = param_list[1])
+				fit_sampling = fit.eval(fit.params, x = param_list[0])
+				rsquared = 1 - np.sum((param_list[1]-fit_sampling)**2)/np.sum((param_list[1]-np.mean(param_list[1]))**2)
+
+				if rsquared > param_list[4]:
+					return [fit.redchi	, fit.result.params['amplitude'].value, fit.result.params['center'].value, fit.result.params['sigma'].value, fit.result.params['amplitude'].stderr, fit.result.params['center'].stderr, fit.result.params['sigma'].stderr, rsquared]
+				elif count < param_list[5]:
+					rsquared_not_reached = True
+					count += 1
+				else:
+					return [None, None, None, None, None, None, None, rsquared]
+
 
 		fitrange = positions*rel_fitrange
 		n_peaks = positions.shape[0]
@@ -416,7 +417,7 @@ class rawMALDI(MALDI):
 					sigma_err[peak,pixel] = None
 					continue
 				print('peak ' + str(peak) + ' not measured in pixels ' + str(failed_pixels[peak]), end = '\r')
-				param_list.append([self.data_spectrum[pixel][0][lower:higher], self.data_spectrum[pixel][1][lower:higher], params, model])
+				param_list.append([self.data_spectrum[pixel][0][lower:higher], self.data_spectrum[pixel][1][lower:higher], params, model, rsquared_thresh, retries])
 			if len(param_list)>0:
 				pool = Pool(self.n_processes)
 				fit_results = pool.map(_fit_pixelwise, param_list)
@@ -434,7 +435,8 @@ class rawMALDI(MALDI):
 				amps_err[peak,nonnan] = fit_results[:,4]
 				x0_err[peak,nonnan] = fit_results[:,5]
 				sigma_err[peak,nonnan] = fit_results[:,6]
-		return chi_res, amp, x0, sigma, amps_err, x0_err, sigma_err
+				rsquared[peak,nonnan] = fit_results[:,7]
+		return rsquared, chi_res, amp, x0, sigma, amps_err, x0_err, sigma_err
 
 	def center_of_mass(self, massrange = None):
 		"""calculate the center of mass for each spectra in all pixels
