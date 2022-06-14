@@ -81,7 +81,7 @@ class metaspace(object):
 		self.dataset_names = dataset_names
 		self.databases = databases
 		self.max_fdr = max_fdr
-		self.self.sm = create_instance(api_key)
+		self.self.sm = _create_instance(api_key)
 		self.proj_id = proj_id		#TODO still needed?
 		self.database_ids = {'HMDB' : 22, 'LipidMaps' : 24, 'SwissLipids' : 26}
 		self.base_url = ['https://metaspace2020.eu/annotations?' + 'db_id=', '&prj=', '&ds=', '&mz=']		#TODO still needed?
