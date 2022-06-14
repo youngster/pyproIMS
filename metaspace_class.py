@@ -74,6 +74,7 @@ class metaspace(object):
 			"""
 			sm = SMInstance(host = 'https://metaspace2020.eu', api_key = api_key)
 			if not sm.logged_in():
+				import getpass
 				api_key = getpass.getpass(prompt='API key: ', stream=None)
 				sm.login(api_key=api_key)
 			return sm
