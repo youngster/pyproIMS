@@ -218,7 +218,6 @@ class metaspace(object):
 		for index, row in self.data.iterrows():
 			if (row['mz']-oldmz) < rrange*row['mz']:
 				self.data.drop(index, inplace=True)
-				print('removed ' + str(row['mz']))
 			else:
 				oldmz = row['mz']
 
