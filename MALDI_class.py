@@ -5,7 +5,7 @@ import numpy as np
 from pyimzml.ImzMLParser import ImzMLParser
 from scipy import signal
 from pathos.multiprocessing import ProcessingPool as Pool
-
+import os
 
 class MALDI(object):
 	"""A class for reading MALDI imzML Data and applying simple operations
@@ -49,6 +49,8 @@ class MALDI(object):
 	"""
 	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1):
 		self.filename = filename
+		if not os.path.isfile(self.filename.split('.')[0] + '.ibd'):
+ 			raise ValueError('ibd file does not exist')
 		self.file = ImzMLParser(self.filename)
 		self.shape = np.array([self.file.imzmldict['max count of pixels x'], self.file.imzmldict['max count of pixels y']])
 		self.map2D = np.array(self.file.coordinates)[:,:-1]-1		#get x and y indices z index is thrown away as it is non-existent		#minus 1 because some people think counting starts at 1
