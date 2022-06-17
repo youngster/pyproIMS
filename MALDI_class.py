@@ -16,7 +16,7 @@ class MALDI(object):
 		the filename ending in .imzML
 	resolution : float
 		the relative resolution of any measured mass value
-	Range : tuple
+	range : tuple
 		the lower and upper limits of mass values
 	n_processes : int
 		number of parallel processes for operations which allow parallelization
@@ -27,7 +27,7 @@ class MALDI(object):
 		the filename
 	resolution : float
 		the relative resolution of any measured mass value
-	Range : tuple
+	range : tuple
 		the lower and upper limits of mass values
 	n_processes : int
 		number of parallel processes for operations which allow parallelization
@@ -47,7 +47,7 @@ class MALDI(object):
 	print_metadata()
 		retrieve and pretty print the metadata included in the imzML file
 	"""
-	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1):
+	def __init__(self, filename, resolution = 2.5e-5, range = None, n_processes = 1):
 		self.filename = filename
 		if not os.path.isfile(self.filename.split('.')[0] + '.ibd'):
  			raise ValueError('ibd file does not exist')
@@ -57,7 +57,7 @@ class MALDI(object):
 		self.indices = np.arange(self.map2D.shape[0])		#flat indeces of whole dataset
 		self.resolution = resolution
 		self.n_processes = n_processes
-		self.Range = Range
+		self.range = range
 
 	def get_2D(self, vector):
 		"""return a pixel vector as 2D matrix by applying the 2D mapping
@@ -93,7 +93,7 @@ class rawMALDI(MALDI):
 		the filename
 	resolution : float
 		the relative resolution of any measured mass value
-	Range : tuple
+	range : tuple
 		the lower and upper limits of mass values
 	n_processes : int
 		number of parallel processes for operations which allow parallelization
@@ -105,7 +105,7 @@ class rawMALDI(MALDI):
 			the filename
 		resolution : float
 			the relative resolution of any measured mass value
-		Range : tuple
+		range : tuple
 			the lower and upper limits of mass values
 		n_processes : int
 			number of parallel processes for operations which allow parallelization
@@ -139,7 +139,7 @@ class rawMALDI(MALDI):
 	center_of_mass(massrange = None):
 		calculate the center of mass for each spectra in all pixels
 	"""
-	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1):
+	def __init__(self, filename, resolution = 2.5e-5, range = None, n_processes = 1):
 		def _make_data():
 			"""load the dataspectrum using the imzmlparser into a list of lists
 			"""
@@ -147,19 +147,19 @@ class rawMALDI(MALDI):
 				self.data_spectrum.append(np.array(self.file.getspectrum(pixel)))
 
 		def _apply_global_range():
-			""" set the Range variable to the min and max mz-Values of all pixels
+			""" set the range variable to the min and max mz-Values of all pixels
 			"""
 			mins = []
 			maxs = []
 			for pixel in self.indices:
 				mins.append(np.min(self.data_spectrum[pixel][0]))
 				maxs.append(np.max(self.data_spectrum[pixel][0]))
-			self.Range = (np.min(mins), np.max(maxs))
+			self.range = (np.min(mins), np.max(maxs))
 
-		super().__init__(filename, resolution, Range, n_processes)
+		super().__init__(filename, resolution, range, n_processes)
 		self.data_spectrum = []		#[[mzValues, intensityValues]]
 		_make_data()
-		if not self.Range:
+		if not self.range:
 			_apply_global_range()
 
 	def sumpicture(self):
@@ -280,9 +280,9 @@ class rawMALDI(MALDI):
 				factor[pixel] = self.data_spectrum[pixel][1].sum()
 		elif algorithm == 'ticwindow':
 			if thresholds[0] is None:
-				thresholds[0] = self.Range[0]
+				thresholds[0] = self.range[0]
 			if thresholds[1] is None:
-				thresholds[1] = self.Range[1]
+				thresholds[1] = self.range[1]
 			for pixel in self.indices:
 				condition1 = self.data_spectrum[pixel][0] > thresholds[0]
 				condition2 = self.data_spectrum[pixel][0] < thresholds[1]
@@ -387,7 +387,7 @@ class rawMALDI(MALDI):
 		failed_pixels = [[] for _ in range(n_peaks)]
 
 		for peak in range(n_peaks):
-			if positions[peak] < self.Range[0]:
+			if positions[peak] < self.range[0]:
 				print('peak ' + str(peak) + ' out of range')
 				for pixel in self.indices:
 					chi_res[peak,pixel] = None
@@ -454,7 +454,7 @@ class rawMALDI(MALDI):
 			the center of mass for all pixels
 		"""
 		if massrange is None:
-			massrange = self.Range
+			massrange = self.range
 		com = np.zeros(self.indices.shape[0])
 		for pixel in self.indices:
 			massindices = np.nonzero((self.data_spectrum[pixel][0]>massrange[0])&(self.data_spectrum[pixel][0]<massrange[1]))
@@ -470,7 +470,7 @@ class binnedMALDI(MALDI):
 		the filename
 	resolution : float
 		the relative resolution of any measured mass value
-	Range : tuple
+	range : tuple
 		the lower and upper limits of mass values
 	n_processes : int
 		number of parallel processes for operations which allow parallelization
@@ -493,7 +493,7 @@ class binnedMALDI(MALDI):
 			the filename
 		resolution : float
 			the relative resolution of any measured mass value
-		Range : tuple
+		range : tuple
 			the lower and upper limits of mass values
 		n_processes : int
 			number of parallel processes for operations which allow parallelization
@@ -543,7 +543,7 @@ class binnedMALDI(MALDI):
 	TSNE(n_components)
 		calculate the t-distributed stochastic neighbor embedding
 	"""
-	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1, binned_resolution = None, data_histo = None, data_spectrum = None, correlation = None):
+	def __init__(self, filename, resolution = 2.5e-5, range = None, n_processes = 1, binned_resolution = None, data_histo = None, data_spectrum = None, correlation = None):
 
 		def _bin_all(data_spectrum):
 			"""bin the data for all pixel"""
@@ -599,15 +599,15 @@ class binnedMALDI(MALDI):
 					self.data_histo[pixel,:]= bin_2D(data_spectrum, pixel)
 
 		def _bin_data():
-			"""create bins, bincenters and empty data_histo data according to self.binned_resolution and self.Range
+			"""create bins, bincenters and empty data_histo data according to self.binned_resolution and self.range
 			"""	
-			numbins = math.log(self.Range[1]/self.Range[0], 1+self.binned_resolution*2)
-			self.bins = self.Range[0]*(1+self.binned_resolution*2)**np.arange(numbins)
+			numbins = math.log(self.range[1]/self.range[0], 1+self.binned_resolution*2)
+			self.bins = self.range[0]*(1+self.binned_resolution*2)**np.arange(numbins)
 			self.bincenters = np.array([self.bins[i] + (self.bins[i+1]-self.bins[i])/2 for i in range(self.bins.shape[0]-1)])
 			self.data_histo = np.zeros((self.map2D.shape[0],len(self.bins)-1))
 
 		def _apply_global_range(data_spectrum):
-			""" set the Range variable to the min and max mz-Values of all pixels
+			""" set the range variable to the min and max mz-Values of all pixels
 
 				PARAMETERS
 				----------
@@ -621,12 +621,12 @@ class binnedMALDI(MALDI):
 			for pixel in self.indices:
 				mins.append(np.min(data_spectrum[pixel][0]))
 				maxs.append(np.max(data_spectrum[pixel][0]))
-			self.Range = (np.min(mins), np.max(maxs))
+			self.range = (np.min(mins), np.max(maxs))
 
-		super().__init__(filename, resolution, Range, n_processes)
-		if not self.Range:
+		super().__init__(filename, resolution, range, n_processes)
+		if not self.range:
 			if data_spectrum is None:
-				data_spectrum = rawMALDI(self.filename, self.resolution, self.Range, self.n_processes).data_spectrum
+				data_spectrum = rawMALDI(self.filename, self.resolution, self.range, self.n_processes).data_spectrum
 			_apply_global_range(data_spectrum)
 		if not binned_resolution:
 			self.binned_resolution = self.resolution
@@ -635,7 +635,7 @@ class binnedMALDI(MALDI):
 		_bin_data()
 		if data_histo is None:
 			if data_spectrum is None:
-				data_spectrum = rawMALDI(self.filename, self.resolution, self.Range, self.n_processes).data_spectrum
+				data_spectrum = rawMALDI(self.filename, self.resolution, self.range, self.n_processes).data_spectrum
 			_bin_all(data_spectrum)
 		else:
 			self.data_histo = data_histo
@@ -822,7 +822,7 @@ class binnedMALDI(MALDI):
 			#print(indices)
 			prominence, left, right = signal.peak_prominences(reference, indices)		#calculate prominence for peak border estimation
 		
-			selected = selectedMALDI(self.filename, self.resolution, self.Range, self.n_processes, indices.shape[0])
+			selected = selectedMALDI(self.filename, self.resolution, self.range, self.n_processes, indices.shape[0])
 			selected.peakcenters = np.zeros(indices.shape[0])
 			for i in range(indices.shape[0]):
 				lef = left[i] + (indices[i]-left[i])//2		#set the peak boarder at half of the prominence bases for peak i
@@ -958,7 +958,7 @@ class selectedMALDI(MALDI):
 		the filename
 	resolution : float
 		the relative resolution of any measured mass value
-	Range : tuple
+	range : tuple
 		the lower and upper limits of mass values
 	n_processes : int
 		number of parallel processes for operations which allow parallelization
@@ -980,7 +980,7 @@ class selectedMALDI(MALDI):
 			the filename
 		resolution : float
 			the relative resolution of any measured mass value
-		Range : tuple
+		range : tuple
 			the lower and upper limits of mass values
 		n_processes : int
 			number of parallel processes for operations which allow parallelization
@@ -1008,8 +1008,8 @@ class selectedMALDI(MALDI):
 	correlatepeaks(refpeak)
 		calculate the correlation between the spatial distribution of a refpeak and all other peaks based on peaks in peak_histo
 	"""
-	def __init__(self, filename, resolution = 2.5e-5, Range = None, n_processes = 1, n_peaks = 0, selected_resolution = None, peakcenters = None, peak_histo = None, correlation = None):
-		super().__init__(filename, resolution, Range, n_processes)
+	def __init__(self, filename, resolution = 2.5e-5, range = None, n_processes = 1, n_peaks = 0, selected_resolution = None, peakcenters = None, peak_histo = None, correlation = None):
+		super().__init__(filename, resolution, range, n_processes)
 		if (peakcenters is None) & (peak_histo is None):
 			self.peakcenters = np.zeros(n_peaks)
 			self.peak_histo = np.zeros((self.indices.shape[0], n_peaks))
