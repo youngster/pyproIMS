@@ -8,7 +8,7 @@ from pathos.multiprocessing import ProcessingPool as Pool
 import os
 
 class MALDI(object):
-	"""A class for reading MALDI imzML Data and applying simple operations
+	"""A class for reading MALDI-IMS imzML Data and applying simple operations
 
 	PARAMETERS
 	----------
@@ -85,7 +85,7 @@ class MALDI(object):
 		pp.pp(metadata)
 
 class rawMALDI(MALDI):
-	"""A class for processing raw MALDI data
+	"""A class for processing raw MALDI-IMS data
 	
 	PARAMETERS
 	----------
@@ -462,7 +462,7 @@ class rawMALDI(MALDI):
 		return com
 
 class binnedMALDI(MALDI):
-	"""A class for processing binned MALDI data, which allows to load already binned data
+	"""A class for processing binned MALDI-IMS data, which allows to load already binned data
 
 	PARAMETERS
 	----------
