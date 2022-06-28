@@ -1,1 +1,1 @@
-repository for combining various MALDI data processing approaches based on pyimzML, metaspace2020 and Cardinal
+Repository for combining various MALDI-IMS data processing approaches based on pyimzML and metaspace2020.
