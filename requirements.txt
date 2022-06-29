@@ -1,0 +1,12 @@
+lmfit==1.0.2
+matplotlib==2.1.1
+metaspace==0.0.1
+metaspace2020==1.8.5
+msac==0.1.0
+numpy==1.13.3
+pandas==0.23.3
+pathos==0.2.7
+pyimzML==1.4.1
+pyteomics==4.5.3
+scikit_learn==1.1.1
+scipy==0.19.1
